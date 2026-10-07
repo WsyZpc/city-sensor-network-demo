@@ -226,6 +226,7 @@ def readings(request: Request, limit: int = Query(default=3, ge=1, le=500)):
         "sampling": app.state.sampling,
         "sampling_error": app.state.sampling_error,
         "interval_seconds": INTERVAL_SECONDS,
+        "sampling_mode": "browser" if os.environ.get("VERCEL") == "1" else "server",
         "anchored": False,
         "preview_only": preview_only,
     }

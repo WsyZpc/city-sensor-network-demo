@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light">
   <title>城市传感器网络 · 节点控制台</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/wallet.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
@@ -16,21 +17,21 @@
     <a href="/subscribe" class="nav-item"><span>☑</span> 数据订阅</a>
     <a href="/verify" class="nav-item"><span> EDI</span> 文件验证</a>
     <div class="sidebar-note"><span class="note-line"></span><strong>从一条数据开始。</strong><p>记录环境变化，<br>让数据的来路可以被看见。</p></div>
-    <div class="stage"><span>当前阶段</span><strong>01 / 本地采集</strong><p>模拟数据 · SQLite 存储</p></div>
+    <div class="stage"><span>当前阶段</span><strong>01 / 模拟采集</strong><p>模拟数据 · SQLite 存储</p></div>
   </aside>
   <main>
-    <div class="topbar"><span>工作台 <span class="slash">/</span> 节点控制台</span><span class="local-badge"><i></i> 本地开发环境</span></div>
+    <div class="topbar"><span>工作台 <span class="slash">/</span> 节点控制台</span><span class="local-badge"><i></i> 在线演示环境</span></div>
     <header class="page-header">
-      <div><div class="eyebrow">OBSERVE · RECORD · VERIFY</div><h1>看见城市的每一次变化<span>。</span></h1><p>从一个模拟节点开始，建立你的环境数据采集流程。</p></div>
+      <div><div class="eyebrow">OBSERVE · RECORD · VERIFY</div><h1>看见城市的每一次变化<span>。</span></h1><p>页面保持可见时自动生成模拟读数；可暂停、单次采样和打包。</p></div>
       <div class="actions"><span id="access-status" class="tag">正在检查钱包权限…</span><button id="wallet-login" class="button secondary">连接钱包以下载</button><button id="wallet-logout" class="button secondary" hidden>退出</button><button id="toggle" class="button secondary" disabled>正在连接…</button><button id="sample" class="button primary" disabled><span>＋</span> 采样一次</button></div>
     </header>
     <div id="error" class="error" role="alert" hidden></div>
     <section class="notice"><span class="notice-icon">i</span><div><strong>模拟数据演示</strong><span>读数由 Python 生成，不代表真实监测结果。已打包文件的上链状态见下方批次记录；哈希只能验证文件完整性。</span></div><span class="tag">SIMULATION</span></section>
-    <section class="node-strip"><div class="node-name"><span class="node-symbol">⌁</span><div><strong>武汉演示节点 <span class="subtle">01</span></strong><small>wuhan-demo-001</small></div></div><div class="node-detail"><span>采样间隔</span><strong>每 5 秒</strong></div><div class="node-detail"><span>数据来源</span><strong>Python 模拟器</strong></div><div class="status-pill" id="status">连接中</div></section>
+    <section class="node-strip"><div class="node-name"><span class="node-symbol">⌁</span><div><strong>武汉演示节点 <span class="subtle">01</span></strong><small>wuhan-demo-001</small></div></div><div class="node-detail"><span>采样间隔</span><strong>约每 5 秒</strong></div><div class="node-detail"><span>数据来源</span><strong>Python 模拟器</strong></div><div class="status-pill" id="status">连接中</div></section>
     <section class="metrics" aria-label="最新监测读数">
       <article class="metric"><div class="metric-title">PM2.5 浓度 <span>01</span></div><div class="metric-value"><strong id="pm25">—</strong><span>μg/m³</span></div><div class="metric-foot"><i></i> 最新模拟读数</div></article>
       <article class="metric"><div class="metric-title">环境噪音 <span>02</span></div><div class="metric-value"><strong id="noise">—</strong><span>dB</span></div><div class="metric-foot"><i class="blue"></i> 最新模拟读数</div></article>
-      <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot">已保存至本地数据库</div></article>
+      <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot">已保存至云端演示实例</div></article>
     </section>
     <section class="chart-panel panel">
       <div class="panel-heading"><div><h2>环境数据趋势</h2><p>最近 60 条采样 · 横轴为本地时间</p></div><div class="chart-tabs" role="group" aria-label="选择图表指标"><button class="selected" data-metric="pm25_ug_m3" aria-pressed="true">PM2.5</button><button data-metric="noise_db" aria-pressed="false">噪音</button></div></div>
@@ -38,15 +39,15 @@
       <div class="chart-wrap"><svg id="chart" role="img" aria-label="模拟 PM2.5 最近采样趋势"></svg><div id="chart-empty">等待第一条采样数据…</div></div>
     </section>
     <section class="bottom-grid">
-      <div class="panel records-panel"><div class="panel-heading"><div><h2>最近采样记录</h2><p>保留原始时间、序号与读数</p></div><span class="tiny-label">LATEST 8</span></div><div class="table-wrap"><table><thead><tr><th>序号</th><th>采样时间</th><th>PM2.5 <small>μg/m³</small></th><th>噪音 <small>dB</small></th><th>来源</th></tr></thead><tbody id="records"><tr><td colspan="5">正在连接本地服务…</td></tr></tbody></table></div></div>
-      <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>Python 模拟器持续采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p>SQLite 持久保存，重启后保留</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔测试网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>测试网订阅合约已连接，交易待演示</p></div></div></div>
+      <div class="panel records-panel"><div class="panel-heading"><div><h2>最近采样记录</h2><p>保留原始时间、序号与读数</p></div><span class="tiny-label">LATEST 8</span></div><div class="table-wrap"><table><thead><tr><th>序号</th><th>采样时间</th><th>PM2.5 <small>μg/m³</small></th><th>噪音 <small>dB</small></th><th>来源</th></tr></thead><tbody id="records"><tr><td colspan="5">正在连接云端服务…</td></tr></tbody></table></div></div>
+      <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>保持此页面可见时定时采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p>演示临时存储，实例重启后可能重置</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔测试网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>测试网订阅合约已连接，交易待演示</p></div></div></div>
     </section>
     <section class="panel batches-panel">
       <div class="panel-heading"><div><h2>数据批次与存证指纹</h2><p>每分钟把读数打包为 JSON 文件并计算 SHA-256 指纹 · 点击"上链"把指纹提交到 BOT Chain</p></div><button id="seal" class="button secondary" disabled>立即打包批次</button></div>
       <div class="table-wrap"><table><thead><tr><th>批次</th><th>打包时间</th><th>记录数</th><th>SHA-256 指纹</th><th>链上状态</th><th>文件</th></tr></thead><tbody id="batches"><tr><td colspan="6">等待第一个批次…</td></tr></tbody></table></div>
       <p class="verify-note">上链需要 MetaMask 连接到 BOT Chain 测试网（Chain ID 968），且账户有测试网 BOT 余额。数据提供方（合约 owner）才能调用 recordData。</p>
     </section>
-    <footer><span><span class="footer-dot"></span> <span id="updated">等待服务响应</span></span><span>城市传感器网络 <span class="slash">/</span> 本地原型 v0.1</span></footer>
+    <footer><span><span class="footer-dot"></span> <span id="updated">等待服务响应</span></span><span>城市传感器网络 <span class="slash">/</span> 在线 Demo v0.2</span></footer>
   </main>
 </body>
 </html>

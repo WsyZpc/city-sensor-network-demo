@@ -101,34 +101,12 @@ function updateTotalPrice() {
 }
 
 async function connectWallet() {
-    if (typeof window.ethereum === 'undefined') {
-        alert('请安装 MetaMask 浏览器钱包插件。');
-        return;
-    }
+    ui.connect.disabled = true;
     try {
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        signer = provider.getSigner();
-        const network = await provider.getNetwork();
-
-        if (network.chainId !== config.chain_id_decimal) {
-            try {
-                await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [BOT_CHAIN_TESTNET],
-                });
-                provider = new ethers.providers.Web3Provider(window.ethereum);
-                signer = provider.getSigner();
-                if ((await provider.getNetwork()).chainId !== config.chain_id_decimal) {
-                    alert(`钱包尚未切换到 BOT Chain 测试网（Chain ID ${config.chain_id_decimal}）。`);
-                    return;
-                }
-            } catch (addError) {
-                alert(`请在 MetaMask 中切换到 BOT Chain 测试网（Chain ID ${config.chain_id_decimal}）。`);
-                return;
-            }
-        }
-
+        if (!config) throw new Error('网络配置正在加载，请稍后重试。');
+        const connected = await SensorWallet.connect(config);
+        provider = connected.provider;
+        signer = connected.signer;
         const abi = await (await fetch('/static/abi.json', { cache: 'no-store' })).json();
         contract = new ethers.Contract(config.contract_address, abi, signer);
         const address = await signer.getAddress();
@@ -151,6 +129,7 @@ async function connectWallet() {
         ui.walletInfo.hidden = false;
     } catch (error) {
         console.error('连接钱包失败:', error);
+        ui.connect.disabled = false;
         alert('连接钱包失败: ' + (error.message || '未知错误'));
     }
 }
@@ -224,7 +203,11 @@ ui.subscribe.addEventListener('click', subscribe);
 ui.days.addEventListener('input', updateTotalPrice);
 init();
 
-if (window.ethereum?.on) {
-    window.ethereum.on('accountsChanged', () => window.location.reload());
-    window.ethereum.on('chainChanged', () => window.location.reload());
-}
+window.addEventListener('sensor-wallet-changed', () => {
+    provider = signer = contract = null;
+    ui.connect.disabled = false;
+    ui.connect.textContent = '连接钱包';
+    ui.subscribe.disabled = true;
+    ui.walletInfo.hidden = true;
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+});

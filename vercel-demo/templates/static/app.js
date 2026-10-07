@@ -12,6 +12,10 @@ function initApp() {
   let ethersLoading = null;
   let accessState = null;
   let accessLastChecked = 0;
+  let browserSampling = true;
+  let lastAutoSampleAt = 0;
+  let lastAutoSealAt = Date.now();
+  let actionError = "";
 
 async function loadEthers() {
   if (typeof window.ethers !== "undefined") return true;
@@ -36,7 +40,7 @@ async function request(path, options = {}) {
   if (!response.ok) {
     let detail = "";
     try { detail = (await response.json()).detail || ""; } catch {}
-    throw new Error(detail || `请求失败（${response.status}），请检查运行后端的终端。`);
+    throw new Error(detail || `请求失败（${response.status}），请稍后重试。`);
   }
   return response.json();
 }
@@ -171,14 +175,7 @@ async function anchorBatch(batch) {
     return;
   }
   try {
-    await window.ethereum.request({ method: "eth_requestAccounts" });
-    const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-    const network = await web3Provider.getNetwork();
-    if (network.chainId !== chainConfig.chain_id_decimal) {
-      alert(`请在 MetaMask 中切换到 BOT Chain 测试网（Chain ID ${chainConfig.chain_id_decimal}）。`);
-      return;
-    }
-    const signer = web3Provider.getSigner();
+    const { provider: web3Provider, signer } = await SensorWallet.connect(chainConfig);
     const owner = await new ethers.Contract(chainConfig.contract_address, chainAbi, web3Provider).owner();
     const submitter = await signer.getAddress();
     if (owner.toLowerCase() !== submitter.toLowerCase()) {
@@ -206,15 +203,7 @@ async function anchorBatch(batch) {
 
 async function signInWithWallet() {
   if (!chainConfig || !(await loadEthers())) throw new Error("区块链配置尚未就绪，请稍后重试。");
-  if (!window.ethereum) throw new Error("请使用已连接 MetaMask 的浏览器，然后重新打开本地 Demo。");
-  await window.ethereum.request({ method: "eth_requestAccounts" });
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const network = await provider.getNetwork();
-  if (network.chainId !== chainConfig.chain_id_decimal) {
-    throw new Error(`请先在钱包切换到 BOT Chain 测试网（Chain ID ${chainConfig.chain_id_decimal}）。`);
-  }
-  const signer = provider.getSigner();
-  const address = await signer.getAddress();
+  const { signer, address } = await SensorWallet.connect(chainConfig);
   const challenge = await request(`/api/auth/challenge?address=${encodeURIComponent(address)}`);
   const signature = await signer.signMessage(challenge.message);
   await request("/api/auth/verify", {
@@ -229,6 +218,7 @@ async function walletLogin() {
   const button = ui["wallet-login"];
   if (!button) return;
   button.disabled = true;
+  actionError = "";
   try {
     const address = await signInWithWallet();
     diagnostic(`钱包已验证：${address.slice(0, 6)}…${address.slice(-4)}`);
@@ -237,7 +227,8 @@ async function walletLogin() {
     await refreshAccess(true);
     await refresh();
   } catch (error) {
-    ui.error.textContent = `钱包登录失败：${error.message}`;
+    actionError = `钱包登录失败：${error.message}`;
+    ui.error.textContent = actionError;
     ui.error.hidden = false;
   } finally {
     button.disabled = false;
@@ -309,11 +300,12 @@ async function refresh() {
     if (version !== refreshVersion) return;
     diagnostic(`请求成功: total=${data.total}, batches=${batchData.batches.length}`);
     snapshot = data;
+    if (data.sampling_mode === "browser") snapshot.sampling = browserSampling;
     batchList = batchData.batches;
     render();
     renderBatches();
-    ui.error.hidden = !data.sampling_error;
-    ui.error.textContent = data.sampling_error ? "自动采样失败，页面显示的是已有记录。请检查后端终端日志。" : "";
+    ui.error.hidden = !(data.sampling_error || actionError);
+    ui.error.textContent = actionError || (data.sampling_error ? "自动采样失败，页面显示的是已有记录。请稍后重试。" : "");
     ui.toggle.disabled = actionBusy;
     ui.sample.disabled = actionBusy;
     ui.seal.disabled = actionBusy;
@@ -321,7 +313,7 @@ async function refresh() {
   } catch (error) {
     if (version !== refreshVersion) return;
     diagnostic(`请求失败: ${error.message || error}`);
-    ui.error.textContent = "本地服务暂时无法连接，请确认 app.py 仍在运行。已有读数暂时保留。";
+    ui.error.textContent = "云端服务暂时无法连接，请稍后刷新。已有读数暂时保留。";
     ui.error.hidden = false;
     ui.status.textContent = "连接中断";
     ui.toggle.disabled = true;
@@ -332,12 +324,29 @@ async function refresh() {
 }
 
 async function poll() {
+  if (snapshot?.sampling_mode === "browser" && browserSampling && !document.hidden && !actionBusy
+      && Date.now() - lastAutoSampleAt >= snapshot.interval_seconds * 1000) {
+    actionBusy = true;
+    lastAutoSampleAt = Date.now();
+    try {
+      await request("/api/sample", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      if (Date.now() - lastAutoSealAt >= 60000) {
+        await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+        lastAutoSealAt = Date.now();
+      }
+    } catch (error) {
+      actionError = `自动采样未完成：${error.message}`;
+    } finally {
+      actionBusy = false;
+    }
+  }
   await refresh();
   pollTimer = setTimeout(poll, 2000);
 }
 
 async function action(path, body) {
   if (actionBusy) return;
+  actionError = "";
   actionBusy = true;
   ui.toggle.disabled = true;
   ui.sample.disabled = true;
@@ -347,14 +356,26 @@ async function action(path, body) {
     actionBusy = false;
     await refresh();
   } catch (error) {
-    ui.error.textContent = `操作未完成：${error.message}`;
+    actionError = `操作未完成：${error.message}`;
+    ui.error.textContent = actionError;
     ui.error.hidden = false;
   } finally {
     actionBusy = false;
   }
 }
 
-ui.toggle.addEventListener("click", () => action("/api/simulator", { running: !snapshot.sampling }));
+ui.toggle.addEventListener("click", () => {
+  if (snapshot?.sampling_mode === "browser") {
+    browserSampling = !browserSampling;
+    snapshot.sampling = browserSampling;
+    actionError = "";
+    lastAutoSampleAt = 0;
+    render();
+  } else if (snapshot) {
+    action("/api/simulator", { running: !snapshot.sampling });
+  }
+});
+window.addEventListener("sensor-wallet-changed", () => ui["wallet-logout"].click());
 ui.sample.addEventListener("click", () => action("/api/sample", {}));
 ui.seal.addEventListener("click", () => action("/api/batches/seal", {}));
 ui["wallet-login"]?.addEventListener("click", walletLogin);
