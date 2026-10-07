@@ -1,0 +1,9 @@
+{
+  "chain_id_decimal": 968,
+  "chain_id_hex": "0x3c8",
+  "chain_name": "BOT Chain Testnet",
+  "rpc_url": "https://rpc.bohr.life",
+  "explorer_url": "https://test.bohrchain.com",
+  "contract_address": "0xC55793411e9fC98288bA09976D607cEAf94650bB",
+  "stream_id": 0
+}
