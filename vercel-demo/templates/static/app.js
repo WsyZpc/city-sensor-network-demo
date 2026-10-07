@@ -50,6 +50,17 @@ function initApp() {
     } catch { return fallback; }
   };
   const savedAnchors = () => parseObject(storageRead(anchorsStorageKey, "{}"), {});
+  const canProduce = () => Boolean(accessState?.authenticated && accessState?.owner_access);
+  const canDownload = () => Boolean(accessState?.authenticated && accessState?.can_download);
+  const updateProtectedControls = () => {
+    ui.seal.disabled = actionBusy || !canProduce();
+    ui.seal.textContent = canProduce()
+      ? snapshot?.sampling_mode === "browser" ? "生成可上链批次" : "立即打包批次"
+      : accessState?.authenticated ? "仅数据方可打包" : "连接数据方钱包后打包";
+    ui["sample-json"].disabled = !canDownload();
+    ui["sample-json"].title = canDownload() ? "下载测试 JSON" : "连接数据方或有效订阅钱包后可下载";
+    if (batchList.length) renderBatches();
+  };
   const transactionHash = hash => hash?.startsWith("0x") ? hash : `0x${hash}`;
   const setAnchorFeedback = (message, { stage = "idle", txHash = "", blockNumber = 0, sha256Hex = "" } = {}) => {
     if (!ui["anchor-feedback"]) return;
@@ -164,6 +175,7 @@ function initApp() {
     return Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]));
   });
   const sealBrowserBatch = async (automatic = false) => {
+    if (!canProduce()) throw new Error("请先用数据提供方钱包签名登录，再生成可上链批次。");
     const lastSealed = Number(storageRead(lastSealedSequenceKey, "0")) || 0;
     const readings = localReadings.filter(row => Number(row.display_sequence) > lastSealed);
     if (!readings.length) {
@@ -295,7 +307,7 @@ function renderBatches() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 6;
-  cell.textContent = '还没有批次。批次每分钟自动打包一次，也可以点击右上角“立即打包批次”。';
+    cell.textContent = "还没有批次。数据提供方连接钱包后可生成可上链批次。";
     row.append(cell);
     ui.batches.append(row);
     return;
@@ -334,6 +346,11 @@ function renderBatches() {
       missing.textContent = "原文件缺失 · 暂不可上链";
       missing.title = "仅有 SHA-256 无法还原原始文件；请生成新的可上链批次。";
       chainCell.append(missing);
+    } else if (!canProduce()) {
+      const locked = document.createElement("span");
+      locked.className = "cache-status";
+      locked.textContent = accessState?.authenticated ? "仅数据方可上链" : "登录数据方钱包后上链";
+      chainCell.append(locked);
     } else {
       const btn = document.createElement("button");
       btn.className = "button primary";
@@ -356,7 +373,7 @@ function renderBatches() {
         : "本机保存了批次编号和哈希；原始 JSON 未缓存或已清理。";
       fileCell.append(cacheLabel);
     }
-    if (cachedFile || accessState?.can_download) {
+    if (canDownload()) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "button file-download";
@@ -364,6 +381,13 @@ function renderBatches() {
       button.title = cachedFile ? "从本机缓存下载已校验的 JSON" : "从服务下载、校验哈希并保存到本机";
       button.addEventListener("click", () => downloadBatchJson(batch, cachedFile));
       fileCell.append(button);
+    } else if (!accessState?.authenticated) {
+      const connect = document.createElement("button");
+      connect.type = "button";
+      connect.className = "button file-download";
+      connect.textContent = "登录后下载";
+      connect.addEventListener("click", walletLogin);
+      fileCell.append(connect);
     } else {
       const link = document.createElement("a");
       link.href = "/subscribe";
@@ -384,14 +408,14 @@ function renderBatches() {
 
   async function downloadBatchJson(batch, cachedContents = "") {
     try {
+      if (!canDownload()) {
+        showToast(accessState?.authenticated ? "请先购买有效订阅，再下载批次 JSON。" : "请先连接钱包并签名登录，再下载批次 JSON。", true);
+        return false;
+      }
       let contents = cachedContents;
       let cached = Boolean(contents);
       let bytes;
       if (!contents) {
-        if (!accessState?.can_download) {
-          window.location.href = "/subscribe";
-          return;
-        }
         const response = await fetch(`/api/hash/${encodeURIComponent(batch.sha256_hex)}/download`, {
           cache: "no-store",
           credentials: "same-origin",
@@ -432,12 +456,18 @@ function renderBatches() {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
       showToast(cached ? "JSON 已下载，并保存在此浏览器中。" : "JSON 已下载；浏览器存储空间不足，未能保留本机副本。", !cached);
+      return true;
     } catch (error) {
       showToast(error.message || "JSON 下载失败，请稍后重试。", true);
+      return false;
     }
   }
 
   async function downloadPreviewJson() {
+    if (!canDownload()) {
+      showToast("连接数据方或有效订阅钱包后才能下载测试 JSON。", true);
+      return;
+    }
     let readings = snapshot?.readings || [];
     if (!readings.length) {
       try { readings = (await request("/api/readings?limit=10")).readings || []; }
@@ -499,6 +529,10 @@ async function initChain() {
 }
 
 async function anchorBatch(batch, button) {
+  if (!canProduce()) {
+    showToast("只有数据提供方钱包签名登录后才能提交存证。", true);
+    return;
+  }
   if (typeof window.ethereum === "undefined") {
     alert("当前浏览器未检测到 MetaMask，请在安装了 MetaMask 的 Chrome 或 Edge 中打开在线 Demo。");
     return;
@@ -589,6 +623,7 @@ async function walletLogin() {
     const address = await signInWithWallet();
     diagnostic(`钱包已验证：${address.slice(0, 6)}…${address.slice(-4)}`);
     accessState = { authenticated: true, address, owner_access: false, can_download: false };
+    updateProtectedControls();
     ui["access-status"].textContent = "钱包已验证 · 正在查询订阅状态";
     button.textContent = "钱包已连接";
     button.hidden = true;
@@ -630,11 +665,14 @@ async function refreshAccess(force = false) {
       login.textContent = "钱包已连接";
       logout.hidden = false;
     }
+    updateProtectedControls();
   } catch (error) {
     accessLastChecked = Date.now();
+    accessState = { authenticated: false, owner_access: false, can_download: false };
     pill.textContent = "链上订阅状态暂不可用";
     ui.error.textContent = error.message;
     ui.error.hidden = false;
+    updateProtectedControls();
   }
 }
 
@@ -707,8 +745,7 @@ async function refresh() {
       : (snapshot.sampling ? "暂停采样" : "继续采样");
     ui.sample.disabled = actionBusy;
     ui.sample.innerHTML = "<span>＋</span> 采样一次";
-    ui.seal.disabled = actionBusy;
-    ui.seal.textContent = snapshot.sampling_mode === "browser" ? "生成可上链批次" : "立即打包批次";
+    updateProtectedControls();
     void refreshAccess();
   } catch (error) {
     if (version !== refreshVersion) return;
@@ -720,9 +757,7 @@ async function refresh() {
     ui.toggle.textContent = "重试连接";
     ui.sample.disabled = false;
     ui.sample.textContent = "重新加载数据";
-    ui.seal.disabled = false;
-    ui.seal.textContent = "重新加载批次";
-    ui["sample-json"].disabled = false;
+    updateProtectedControls();
     ui.updated.textContent = "连接中断 · 页面读数可能已过时";
   }
 }
@@ -734,7 +769,7 @@ async function poll() {
     if (snapshot?.sampling_mode === "browser" && browserSampling && !document.hidden && !actionBusy) {
       const reading = await request("/api/sample", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       applyBrowserSample(reading);
-      if (Date.now() - lastAutoSealAt >= 60000) {
+      if (canProduce() && Date.now() - lastAutoSealAt >= 60000) {
         lastAutoSealAt = Date.now();
         try { await sealBrowserBatch(true); }
         catch (error) { actionError = `批次自动打包未完成：${error.message}`; }
@@ -795,6 +830,10 @@ ui["sample-json"].addEventListener("click", downloadPreviewJson);
 window.addEventListener("sensor-wallet-changed", () => ui["wallet-logout"].click());
 ui.sample.addEventListener("click", () => action("/api/sample", {}));
 ui.seal.addEventListener("click", async () => {
+  if (!canProduce()) {
+    showToast("请先用数据提供方钱包签名登录。订阅用户可以下载，只有数据方可以打包和上链。", true);
+    return;
+  }
   if (snapshot?.sampling_mode !== "browser") {
     action("/api/batches/seal", {});
     return;
@@ -804,7 +843,7 @@ ui.seal.addEventListener("click", async () => {
   ui.seal.disabled = true;
   try { await sealBrowserBatch(); }
   catch (error) { showToast(`批次生成失败：${error.message || error}`, true); }
-  finally { actionBusy = false; ui.seal.disabled = false; }
+  finally { actionBusy = false; updateProtectedControls(); }
 });
 ui["wallet-login"]?.addEventListener("click", walletLogin);
 ui["wallet-logout"]?.addEventListener("click", async () => {
@@ -818,6 +857,7 @@ ui["wallet-logout"]?.addEventListener("click", async () => {
     accessState = null;
     accessLastChecked = 0;
     if (ui["access-status"]) ui["access-status"].textContent = "公开预览 · 需订阅以下载完整数据";
+    updateProtectedControls();
     await refresh();
   } catch (error) {
     ui.error.textContent = error.message;
@@ -838,6 +878,7 @@ const previousProof = parseObject(storageRead(anchorFeedbackStorageKey, "{}"), {
 if (previousProof.stage === "confirmed" && previousProof.txHash) {
   setAnchorFeedback(previousProof.message, previousProof);
 }
+updateProtectedControls();
 poll();
 void initChain().catch(error => console.warn("BOT Chain 配置加载失败:", error));
 refreshAccess();

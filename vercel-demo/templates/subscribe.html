@@ -19,14 +19,14 @@
   <main>
     <div class="topbar"><span>工作台 <span class="slash">/</span> 数据订阅</span><span class="local-badge"><i></i> BOT Chain 主网</span></div>
     <header class="page-header">
-      <div><div class="eyebrow">SUBSCRIBE · PAY · ACCESS</div><h1>获取原始数据访问权限<span>。</span></h1><p>连接钱包，通过 BOT Chain 购买数据订阅。链上记录，到期自动失效。</p></div>
+      <div><div class="eyebrow">SUBSCRIBE · PAY · ACCESS</div><h1>演示数据订阅权限<span>。</span></h1><p>连接钱包，通过 BOT Chain 演示订阅、权限核验与受控下载。</p></div>
     </header>
     <section class="panel">
       <div class="panel-heading"><div><h2>订阅选项</h2><p id="stream-info">正在加载链上数据流信息…</p></div></div>
       <div class="subscribe-option">
         <div>
           <h3 id="stream-name">武汉空气质量数据流</h3>
-          <p>访问武汉演示节点的全部原始采样数据，含已上链的批次文件。</p>
+          <p>有效订阅可解锁在线服务中仍可用的完整批次 JSON；实时预览对游客开放。</p>
         </div>
         <div class="subscribe-action">
           <div class="price"><span id="price-per-day">—</span> <span>BOT/天</span></div>
@@ -37,6 +37,7 @@
         </div>
       </div>
     </section>
+    <div class="notice" style="margin-top:19px"><span class="notice-icon">i</span><div><strong>演示限制</strong><span>新生成的本机批次只保存在数据方当前浏览器；Vercel 临时文件可能过期。购买链上订阅不会自动把该文件交付到其他设备，跨设备商业交付尚需持久存储。请在支付 BOT 前确认所需文件可用。</span></div></div>
     <section id="wallet-info" class="panel" hidden>
       <div class="panel-heading"><div><h2>钱包信息</h2></div></div>
       <div class="verify-grid">
@@ -52,9 +53,9 @@
       <div class="panel-heading"><div><h2>如何验证订阅生效</h2></div></div>
       <div class="verify-note" style="padding:20px 24px">
         <p>1. 连接钱包后，页面会显示当前订阅状态和到期时间。</p>
-        <p>2. 购买订阅后，前往<a href="/">节点控制台</a>下载数据批次文件。</p>
+        <p>2. 购买订阅后，前往<a href="/">节点控制台</a>下载当前可用的数据批次文件。</p>
         <p>3. 在<a href="/verify">文件验证</a>页面上传文件，与链上哈希比对。</p>
-        <p>4. 订阅到期后，下载权限自动失效。</p>
+        <p>4. 订阅到期后，服务端新下载权限失效；已下载到设备的副本无法撤回。</p>
       </div>
     </section>
   </main>

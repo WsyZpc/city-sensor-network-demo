@@ -42,6 +42,27 @@ class FakeBatches:
 
 
 class BatchDownloadTests(unittest.TestCase):
+    def test_guest_cannot_seal_or_register_anchor(self):
+        with patch.object(webapp, "session_address", return_value=None):
+            with self.assertRaises(HTTPException) as seal_error:
+                webapp.seal_batch_now(object())
+            with self.assertRaises(HTTPException) as anchor_error:
+                webapp.anchor_batch(1, webapp.AnchorRequest(tx_hash="0x" + "a" * 64), object())
+        self.assertEqual(seal_error.exception.status_code, 401)
+        self.assertEqual(anchor_error.exception.status_code, 401)
+
+    def test_subscriber_cannot_seal_or_register_anchor(self):
+        with (
+            patch.object(webapp, "session_address", return_value=SUBSCRIBER),
+            patch.object(webapp, "chain", FakeChain(owner=OWNER, subscribed=True)),
+        ):
+            with self.assertRaises(HTTPException) as seal_error:
+                webapp.seal_batch_now(object())
+            with self.assertRaises(HTTPException) as anchor_error:
+                webapp.anchor_batch(1, webapp.AnchorRequest(tx_hash="0x" + "a" * 64), object())
+        self.assertEqual(seal_error.exception.status_code, 403)
+        self.assertEqual(anchor_error.exception.status_code, 403)
+
     def test_authorized_batch_listing_includes_verified_original_file(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sensor-batch-test.json"

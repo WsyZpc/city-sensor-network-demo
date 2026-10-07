@@ -139,6 +139,17 @@ def required_address(request: Request) -> str:
     return address
 
 
+def required_owner(request: Request) -> str:
+    address = required_address(request)
+    try:
+        owner = chain.owner()
+    except ChainError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if owner.lower() != address.lower():
+        raise HTTPException(status_code=403, detail="只有数据提供方钱包可以打包或提交链上存证。")
+    return address
+
+
 def set_auth_cookie(response: Response, request: Request, name: str, token: str, max_age: int):
     response.set_cookie(
         name,
@@ -320,6 +331,7 @@ def list_batches(request: Request, limit: int = Query(default=10, ge=1, le=200),
 
 @app.post("/api/batches/seal", status_code=201)
 def seal_batch_now(request: Request):
+    required_owner(request)
     batch = batches.seal()
     if batch is None and os.environ.get("VERCEL") == "1":
         # A request may land on a fresh serverless instance that only has its seed batch.
@@ -328,10 +340,9 @@ def seal_batch_now(request: Request):
         batch = batches.seal()
     if batch is None:
         raise HTTPException(status_code=400, detail="没有未打包的新读数，无需创建批次。")
-    if can_download_batches(request):
-        contents = batch_file_base64(batch)
-        if contents is not None:
-            return {**batch, "batch_file_base64": contents}
+    contents = batch_file_base64(batch)
+    if contents is not None:
+        return {**batch, "batch_file_base64": contents}
     return batch
 
 
@@ -404,7 +415,8 @@ class AnchorRequest(BaseModel):
 
 
 @app.post("/api/batches/{batch_seq}/anchor", status_code=200)
-def anchor_batch(batch_seq: int, req: AnchorRequest):
+def anchor_batch(batch_seq: int, req: AnchorRequest, request: Request):
+    required_owner(request)
     batch = batches.get(batch_seq)
     if batch is None and os.environ.get("VERCEL") != "1":
         raise HTTPException(status_code=404, detail="批次不存在。")

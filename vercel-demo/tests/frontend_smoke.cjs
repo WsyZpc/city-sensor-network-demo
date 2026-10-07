@@ -77,6 +77,7 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   });
   let sampleCount = 0;
   let walletConnected = false;
+  let walletRole = 'owner';
   let submittedHash = '';
   const txHash = '0x' + 'a'.repeat(64);
   const batchJson = '{"readings":[]}';
@@ -97,9 +98,11 @@ async function browserSamplingSurvivesOldServerSnapshots() {
       batches: [demoBatch],
       ...(url.includes('include_files=true') ? { batch_files: { [batchHash]: Buffer.from(batchJson).toString('base64') } } : {}),
     };
-    else if (url === '/api/access') body = { authenticated: walletConnected, can_download: walletConnected };
+    else if (url === '/api/access') body = { authenticated: walletConnected, owner_access: walletConnected && walletRole === 'owner',
+      can_download: walletConnected };
     else if (url.startsWith('/api/auth/challenge')) body = { message: 'Demo sign-in challenge' };
     else if (url === '/api/auth/verify') body = { authenticated: true };
+    else if (url === '/api/auth/logout') { walletConnected = false; body = { authenticated: false }; }
     else if (url === '/static/abi.json') body = [];
     else if (url === '/static/chain-config.json') {
       body = { chain_id_decimal: 677, contract_address: '0x' + '1'.repeat(40) };
@@ -116,6 +119,8 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   assert.ok(Number(elements.get('total').textContent) >= 14, 'Displayed total must advance');
   assert.ok(elements.get('records').children.length > 3, 'New samples must remain visible after old snapshots');
   assert.ok(JSON.parse(saved.get('city-sensor-network:browser-readings')).length >= 2);
+  assert.equal(elements.get('seal').disabled, true, 'Guest must not be able to create an anchor batch');
+  assert.equal(elements.get('sample-json').disabled, true, 'Guest must not download preview JSON');
   assert.match(elements.get('chain-status').textContent, /配置已读取/);
   assert.equal(typeof elements.get('sample-json').listeners.click, 'function');
   assert.equal(elements.get('sample').disabled, false);
@@ -144,6 +149,7 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   assert.equal(walletConnected, true, 'Homepage wallet button must call the provider');
   assert.equal(elements.get('wallet-logout').hidden, false);
   await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(elements.get('seal').disabled, false, 'Contract owner may create batches');
   const cached = JSON.parse(saved.get('city-sensor-network:batch-json'));
   assert.equal(cached[batchHash], batchJson, 'Authorized listing must preserve verified original JSON');
   await elements.get('seal').listeners.click();
@@ -158,11 +164,29 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   const localRow = elements.get('batches').children
     .find(row => row.children[3]?.children[0]?.title === '0x' + browserBatch.sha256_hex);
   assert.ok(localRow);
-  await localRow.children[4].children[0].listeners.click();
+  const anchorAction = localRow.children[4].children[0].listeners.click;
+  const downloadAction = localRow.children[5].children.at(-1).listeners.click;
+  await anchorAction();
   assert.equal(submittedHash, '0x' + browserBatch.sha256_hex);
   assert.match(elements.get('anchor-feedback').children[0].textContent, /主网存证成功/);
   assert.match(elements.get('anchor-feedback').children[2].href, /scan\.botchain\.ai\/tx\/0x/);
   assert.equal(JSON.parse(saved.get('city-sensor-network:anchors'))[browserBatch.sha256_hex].anchor_verified, true);
+  await elements.get('wallet-logout').listeners.click();
+  assert.equal(elements.get('seal').disabled, true, 'Logout must lock producer controls');
+  assert.equal(elements.get('sample-json').disabled, true, 'Logout must lock JSON download');
+  submittedHash = '';
+  await anchorAction();
+  assert.equal(submittedHash, '', 'Stale anchor action must not submit after logout');
+  await downloadAction();
+  assert.match(elements.get('toast').textContent, /请先连接钱包/);
+  walletRole = 'subscriber';
+  await elements.get('wallet-login').listeners.click();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(elements.get('seal').disabled, true, 'Subscriber must not create producer batches');
+  assert.equal(elements.get('sample-json').disabled, false, 'Subscriber may download authorized JSON');
+  const subscriptionRow = elements.get('batches').children
+    .find(row => row.children[3]?.children[0]?.title === '0x' + batchHash);
+  assert.match(subscriptionRow.children[4].children[0].textContent, /仅数据方可上链/);
 }
 
 (async () => {
