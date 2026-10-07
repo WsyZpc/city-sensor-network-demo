@@ -23,7 +23,7 @@
     <div class="topbar"><span>工作台 <span class="slash">/</span> 节点控制台</span><span class="local-badge"><i></i> 在线演示环境</span></div>
     <header class="page-header">
       <div><div class="eyebrow">OBSERVE · RECORD · VERIFY</div><h1>看见城市的每一次变化<span>。</span></h1><p>页面保持可见时自动生成模拟读数；可暂停、单次采样和打包。</p></div>
-      <div class="actions"><span id="access-status" class="tag">正在检查钱包权限…</span><button id="wallet-login" class="button secondary">连接钱包以下载</button><button id="wallet-logout" class="button secondary" hidden>退出</button><button id="toggle" class="button secondary" disabled>正在连接…</button><button id="sample" class="button primary" disabled><span>＋</span> 采样一次</button></div>
+      <div class="actions"><span id="access-status" class="tag">正在检查钱包权限…</span><button id="wallet-login" class="button secondary">连接钱包以下载</button><button id="wallet-logout" class="button secondary" hidden>退出</button><button id="toggle" class="button secondary">重试连接</button><button id="sample" class="button primary"><span>＋</span> 采样一次</button></div>
     </header>
     <div id="error" class="error" role="alert" hidden></div>
     <section class="notice"><span class="notice-icon">i</span><div><strong>模拟数据演示</strong><span>读数由 Python 生成，不代表真实监测结果。已打包文件的上链状态见下方批次记录；哈希只能验证文件完整性。</span></div><span class="tag">SIMULATION</span></section>
@@ -43,7 +43,7 @@
       <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>在线页面每秒请求一次采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p>演示临时存储，实例重启后可能重置</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔 BOT Chain 主网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>BOT Chain 主网订阅合约已连接，交易待演示</p></div></div></div>
     </section>
     <section class="panel batches-panel">
-      <div class="panel-heading"><div><h2>数据批次与存证指纹</h2><p>每分钟打包 JSON 并计算 SHA-256 · 下载时会校验指纹并保存到本机浏览器（最多保留 30 份）</p></div><div class="batch-actions"><button id="sample-json" class="button secondary" disabled>下载测试 JSON</button><button id="seal" class="button primary" disabled>立即打包批次</button></div></div>
+      <div class="panel-heading"><div><h2>数据批次与存证指纹</h2><p>每分钟打包 JSON 并计算 SHA-256 · 下载时会校验指纹并保存到本机浏览器（最多保留 30 份）</p></div><div class="batch-actions"><button id="sample-json" class="button secondary">下载测试 JSON</button><button id="seal" class="button primary">立即打包批次</button></div></div>
       <div class="table-wrap"><table><thead><tr><th>批次</th><th>打包时间</th><th>记录数</th><th>SHA-256 指纹</th><th>链上状态</th><th>文件</th></tr></thead><tbody id="batches"><tr><td colspan="6">等待第一个批次…</td></tr></tbody></table></div>
       <p class="verify-note">上链需要 MetaMask 连接到 BOT Chain 主网（Chain ID 677），且账户有 BOT 余额。数据提供方（合约 owner）才能调用 recordData。</p>
     </section>

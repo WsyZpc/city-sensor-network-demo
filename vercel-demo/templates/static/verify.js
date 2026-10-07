@@ -4,6 +4,7 @@ const ui = {
     fileInput: document.getElementById('file-input'),
     verify: document.getElementById('verify'),
     verifyResult: document.getElementById('verify-result'),
+    selectedFile: document.getElementById('selected-file'),
     fileName: document.getElementById('file-name'),
     fileSize: document.getElementById('file-size'),
     localHash: document.getElementById('local-hash'),
@@ -136,4 +137,10 @@ async function verifyFile() {
 }
 
 ui.verify.addEventListener('click', verifyFile);
+ui.fileInput.addEventListener('change', () => {
+    const file = ui.fileInput.files[0];
+    ui.selectedFile.textContent = file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB` : '尚未选择文件';
+    ui.verify.disabled = !file;
+    ui.verify.textContent = file ? '验证文件' : '选择文件后验证';
+});
 init();

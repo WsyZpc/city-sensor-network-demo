@@ -21,6 +21,15 @@ function initApp() {
   const anchorsStorageKey = "city-sensor-network:anchors";
   const batchFilesStorageKey = "city-sensor-network:batch-json";
   let toastTimer;
+  const storageRead = (key, fallback = "") => {
+    try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+  };
+  const storageWrite = (key, value) => {
+    try { localStorage.setItem(key, value); return true; } catch (error) {
+      console.warn("浏览器本机存储不可用：", error);
+      return false;
+    }
+  };
   const showToast = (message, isError = false) => {
     if (!ui.toast) return;
     ui.toast.textContent = message;
@@ -29,34 +38,38 @@ function initApp() {
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => ui.toast.classList.remove("visible"), 3600);
   };
-  const savedAnchors = () => {
-    try { return JSON.parse(localStorage.getItem(anchorsStorageKey) || "{}"); } catch { return {}; }
+  const parseObject = (raw, fallback) => {
+    try {
+      const value = JSON.parse(raw);
+      return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+    } catch { return fallback; }
   };
-  const storedTotal = () => Number.parseInt(localStorage.getItem(totalStorageKey) || "0", 10) || 0;
+  const savedAnchors = () => parseObject(storageRead(anchorsStorageKey, "{}"), {});
+  const storedTotal = () => Number.parseInt(storageRead(totalStorageKey, "0"), 10) || 0;
   const rememberTotal = total => {
     const remembered = Math.max(storedTotal(), Number(total) || 0);
-    localStorage.setItem(totalStorageKey, String(remembered));
+    storageWrite(totalStorageKey, String(remembered));
     return remembered;
   };
   const countLocalSample = () => {
     const next = storedTotal() + 1;
-    localStorage.setItem(totalStorageKey, String(next));
+    storageWrite(totalStorageKey, String(next));
     if (snapshot) snapshot.total = Math.max(Number(snapshot.total) || 0, next);
   };
   const savedBatches = () => {
-    try { return JSON.parse(localStorage.getItem(batchesStorageKey) || "[]"); } catch { return []; }
+    try {
+      const value = JSON.parse(storageRead(batchesStorageKey, "[]"));
+      return Array.isArray(value) ? value : [];
+    } catch { return []; }
   };
-  const savedBatchFiles = () => {
-    try { return JSON.parse(localStorage.getItem(batchFilesStorageKey) || "{}"); } catch { return {}; }
-  };
+  const savedBatchFiles = () => parseObject(storageRead(batchFilesStorageKey, "{}"), {});
   const rememberBatchFile = (hash, contents) => {
     try {
       const files = savedBatchFiles();
       files[hash] = contents;
       const keep = new Set(savedBatches().map(batch => batch.sha256_hex).filter(Boolean).slice(-30));
       const trimmed = Object.fromEntries(Object.entries(files).filter(([key]) => keep.has(key)).slice(-30));
-      localStorage.setItem(batchFilesStorageKey, JSON.stringify(trimmed));
-      return true;
+      return storageWrite(batchFilesStorageKey, JSON.stringify(trimmed));
     } catch (error) {
       console.warn("本机 JSON 缓存空间不足：", error);
       return false;
@@ -66,7 +79,7 @@ function initApp() {
     const byHash = new Map(savedBatches().filter(batch => batch?.sha256_hex).map(batch => [batch.sha256_hex, { ...batch, cached_only: true }]));
     for (const batch of batches) if (batch?.sha256_hex) byHash.set(batch.sha256_hex, { ...byHash.get(batch.sha256_hex), ...batch, cached_only: false });
     const result = [...byHash.values()].slice(-30);
-    localStorage.setItem(batchesStorageKey, JSON.stringify(result));
+    storageWrite(batchesStorageKey, JSON.stringify(result));
     return result;
   };
 
@@ -245,7 +258,7 @@ function renderBatches() {
         if (cached) {
           const files = savedBatchFiles();
           delete files[batch.sha256_hex];
-          localStorage.setItem(batchFilesStorageKey, JSON.stringify(files));
+          storageWrite(batchFilesStorageKey, JSON.stringify(files));
         }
         throw new Error("文件指纹与批次记录不一致，已停止下载。");
       }
@@ -267,8 +280,12 @@ function renderBatches() {
     }
   }
 
-  function downloadPreviewJson() {
-    const readings = snapshot?.readings || [];
+  async function downloadPreviewJson() {
+    let readings = snapshot?.readings || [];
+    if (!readings.length) {
+      try { readings = (await request("/api/readings?limit=10")).readings || []; }
+      catch (error) { showToast(`暂时无法生成测试文件：${error.message}`, true); return; }
+    }
     if (!readings.length) {
       showToast("暂无采样数据，请稍等片刻再试。", true);
       return;
@@ -353,7 +370,7 @@ async function anchorBatch(batch) {
     });
     const anchors = savedAnchors();
     anchors[batch.sha256_hex] = { anchor_tx: tx.hash.replace(/^0x/, ""), anchor_verified: true, file_name: batch.file_name };
-    localStorage.setItem(anchorsStorageKey, JSON.stringify(anchors));
+    storageWrite(anchorsStorageKey, JSON.stringify(anchors));
     batch.anchor_tx = tx.hash.replace(/^0x/, "");
     batch.anchor_verified = true;
     ui.error.hidden = true;
@@ -440,7 +457,6 @@ async function refreshAccess(force = false) {
 
 function render() {
   const latest = snapshot.readings.at(-1);
-  ui["sample-json"].disabled = !snapshot.readings.length;
   ui.pm25.textContent = latest ? latest.pm25_ug_m3.toFixed(1) : "—";
   ui.noise.textContent = latest ? latest.noise_db.toFixed(1) : "—";
   ui.total.textContent = rememberTotal(snapshot.total).toLocaleString("zh-CN");
@@ -489,8 +505,13 @@ async function refresh() {
     ui.error.hidden = !(data.sampling_error || actionError);
     ui.error.textContent = actionError || (data.sampling_error ? "自动采样失败，页面显示的是已有记录。请稍后重试。" : "");
     ui.toggle.disabled = actionBusy;
+    ui.toggle.textContent = snapshot.sampling_mode === "browser"
+      ? (browserSampling ? "暂停采样" : "继续采样")
+      : (snapshot.sampling ? "暂停采样" : "继续采样");
     ui.sample.disabled = actionBusy;
+    ui.sample.innerHTML = "<span>＋</span> 采样一次";
     ui.seal.disabled = actionBusy;
+    ui.seal.textContent = "立即打包批次";
     await refreshAccess();
   } catch (error) {
     if (version !== refreshVersion) return;
@@ -498,9 +519,13 @@ async function refresh() {
     ui.error.textContent = "云端服务暂时无法连接，请稍后刷新。已有读数暂时保留。";
     ui.error.hidden = false;
     ui.status.textContent = "连接中断";
-    ui.toggle.disabled = true;
-    ui.sample.disabled = true;
-    ui.seal.disabled = true;
+    ui.toggle.disabled = false;
+    ui.toggle.textContent = "重试连接";
+    ui.sample.disabled = false;
+    ui.sample.textContent = "重新加载数据";
+    ui.seal.disabled = false;
+    ui.seal.textContent = "重新加载批次";
+    ui["sample-json"].disabled = false;
     ui.updated.textContent = "连接中断 · 页面读数可能已过时";
   }
 }
@@ -552,7 +577,9 @@ async function action(path, body) {
 }
 
 ui.toggle.addEventListener("click", () => {
-  if (snapshot?.sampling_mode === "browser") {
+  if (!snapshot) {
+    void refresh();
+  } else if (snapshot.sampling_mode === "browser") {
     browserSampling = !browserSampling;
     snapshot.sampling = browserSampling;
     actionError = "";
@@ -592,7 +619,8 @@ document.querySelectorAll("[data-metric]").forEach(button => button.addEventList
   });
   drawChart();
 }));
-new ResizeObserver(drawChart).observe(ui.chart);
+if (window.ResizeObserver) new ResizeObserver(drawChart).observe(ui.chart);
+else window.addEventListener("resize", drawChart);
 poll();
 initChain();
 refreshAccess();
