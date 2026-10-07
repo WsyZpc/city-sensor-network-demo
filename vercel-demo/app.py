@@ -1,6 +1,7 @@
 r"""启动：.\.venv\Scripts\python.exe app.py，然后打开 http://127.0.0.1:8000。"""
 
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -155,7 +156,11 @@ def auth_challenge(address: str, request: Request, response: Response):
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    set_auth_cookie(response, request, "sensor_challenge", token, expires_in)
+    # Include the challenge message in the short-lived HttpOnly cookie. This
+    # keeps sign-in reliable when Vercel sends the two requests to different
+    # serverless instances.
+    cookie_token = "v1." + base64.urlsafe_b64encode(message.encode("utf-8")).decode("ascii").rstrip("=")
+    set_auth_cookie(response, request, "sensor_challenge", cookie_token, expires_in)
     return {"address": wallet_sessions.normalize_address(address), "message": message, "expires_in": expires_in}
 
 

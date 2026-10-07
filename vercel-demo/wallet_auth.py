@@ -3,6 +3,7 @@
 import re
 import secrets
 import threading
+import base64
 from datetime import datetime, timedelta, timezone
 
 from eth_keys import keys
@@ -73,6 +74,23 @@ class WalletSessions:
         now = datetime.now(timezone.utc)
         with self._lock:
             item = self.challenges.pop(token, None)
+        if item is None and token.startswith("v1."):
+            # Vercel can route challenge and verify requests to different
+            # instances, so fall back to the signed challenge carried in the
+            # HttpOnly cookie when the in-memory entry is unavailable.
+            try:
+                encoded = token[3:]
+                encoded += "=" * (-len(encoded) % 4)
+                message = base64.urlsafe_b64decode(encoded.encode()).decode("utf-8")
+                expected = self.normalize_address(address)
+                account = re.search(r"account:\n(0x[0-9a-fA-F]{40})\n", message)
+                expiration = re.search(r"Expiration Time: ([^\n]+)", message)
+                if not account or self.normalize_address(account.group(1)).lower() != expected.lower() or not expiration:
+                    return None
+                expires_at = datetime.fromisoformat(expiration.group(1).replace("Z", "+00:00"))
+                item = (expected, message, expires_at)
+            except (ValueError, UnicodeError):
+                return None
         if item is None or item[2] <= now or item[0].lower() != address.lower():
             return None
         try:
