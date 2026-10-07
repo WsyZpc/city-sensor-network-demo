@@ -17,11 +17,13 @@ window.SensorWallet = (() => {
           await selected.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
         } catch (error) {
           if (Number(error.code ?? error.data?.originalError?.code) !== 4902) throw error;
-          await selected.request({ method: "wallet_addEthereumChain", params: [{
+          const addParams = {
             chainId, chainName: config.chain_name,
             nativeCurrency: { name: "BOT", symbol: "BOT", decimals: 18 },
-            rpcUrls: [config.rpc_url], blockExplorerUrls: [config.explorer_url]
-          }] });
+            rpcUrls: [config.rpc_url]
+          };
+          if (config.explorer_url) addParams.blockExplorerUrls = [config.explorer_url];
+          await selected.request({ method: "wallet_addEthereumChain", params: [addParams] });
           await selected.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
         }
       }
