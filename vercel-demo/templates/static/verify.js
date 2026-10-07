@@ -109,7 +109,7 @@ async function verifyFile() {
         }
         await init();
 
-        const receipt = await provider.getTransactionReceipt(`0x${batch.anchor_tx}`);
+        const receipt = await provider.getTransactionReceipt(batch.anchor_tx.startsWith('0x') ? batch.anchor_tx : `0x${batch.anchor_tx}`);
         if (!receipt || receipt.status !== 1) throw new Error('存证交易暂时无法读取或未成功确认。');
         const contract = new ethers.Contract(chainConfig.contract_address, chainAbi, provider);
         const event = receipt.logs

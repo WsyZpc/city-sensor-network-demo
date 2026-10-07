@@ -1,7 +1,7 @@
 "use strict";
 
 function initApp() {
-  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "chain-status", "anchor-stage", "toast"].map(id => [id, document.getElementById(id)]));
+  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "chain-status", "anchor-stage", "anchor-feedback", "toast"].map(id => [id, document.getElementById(id)]));
   const diagnostic = msg => {
     if (ui.diagnostic) ui.diagnostic.textContent = msg;
   };
@@ -22,6 +22,9 @@ function initApp() {
   const anchorsStorageKey = "city-sensor-network:anchors";
   const batchFilesStorageKey = "city-sensor-network:batch-json";
   const localReadingsStorageKey = "city-sensor-network:browser-readings";
+  const lastSealedSequenceKey = "city-sensor-network:last-local-sealed-sequence";
+  const localBatchNumberKey = "city-sensor-network:last-local-batch-number";
+  const anchorFeedbackStorageKey = "city-sensor-network:last-anchor-feedback";
   let toastTimer;
   const storageRead = (key, fallback = "") => {
     try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
@@ -47,6 +50,27 @@ function initApp() {
     } catch { return fallback; }
   };
   const savedAnchors = () => parseObject(storageRead(anchorsStorageKey, "{}"), {});
+  const transactionHash = hash => hash?.startsWith("0x") ? hash : `0x${hash}`;
+  const setAnchorFeedback = (message, { stage = "idle", txHash = "", blockNumber = 0, sha256Hex = "" } = {}) => {
+    if (!ui["anchor-feedback"]) return;
+    const container = ui["anchor-feedback"];
+    container.replaceChildren();
+    container.className = `anchor-feedback ${stage}`;
+    const title = document.createElement("strong");
+    title.textContent = stage === "confirmed" ? "✓ BOT Chain 主网存证成功" : "链上存证演示";
+    const detail = document.createElement("span");
+    detail.textContent = message;
+    container.append(title, detail);
+    if (txHash) {
+      const link = document.createElement("a");
+      link.href = `${chainConfig?.explorer_url || "https://scan.botchain.ai"}/tx/${transactionHash(txHash)}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = `查看主网交易 ${transactionHash(txHash).slice(0, 10)}…${transactionHash(txHash).slice(-6)}`;
+      container.append(link);
+    }
+    if (stage === "confirmed") storageWrite(anchorFeedbackStorageKey, JSON.stringify({ message, stage, txHash, blockNumber, sha256Hex }));
+  };
   let sessionTotal = Number.parseInt(storageRead(totalStorageKey, "0"), 10) || 0;
   const storedTotal = () => sessionTotal;
   const rememberTotal = total => {
@@ -135,6 +159,63 @@ function initApp() {
     rememberBatches([metadata]);
     return rememberBatchFile(batch.sha256_hex, contents);
   };
+  const canonicalJson = value => JSON.stringify(value, (_key, item) => {
+    if (!item || Array.isArray(item) || typeof item !== "object") return item;
+    return Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]));
+  });
+  const sealBrowserBatch = async (automatic = false) => {
+    const lastSealed = Number(storageRead(lastSealedSequenceKey, "0")) || 0;
+    const readings = localReadings.filter(row => Number(row.display_sequence) > lastSealed);
+    if (!readings.length) {
+      if (!automatic) showToast("还没有新的本机采样记录。请先等一次采样，再生成批次。", true);
+      return null;
+    }
+    const batchSeq = Math.max(Date.now(), (Number(storageRead(localBatchNumberKey, "0")) || 0) + 1);
+    const payload = {
+      batch_seq: batchSeq,
+      node_id: snapshot?.node_id || "wuhan-demo-001",
+      first_sequence: readings[0].display_sequence,
+      last_sequence: readings.at(-1).display_sequence,
+      reading_count: readings.length,
+      sealed_at: new Date().toISOString(),
+      source: "simulated-browser",
+      readings: readings.map(row => ({
+        sequence: row.display_sequence,
+        recorded_at: row.recorded_at,
+        pm25_ug_m3: row.pm25_ug_m3,
+        noise_db: row.noise_db,
+      })),
+    };
+    const contents = canonicalJson(payload);
+    const bytes = new TextEncoder().encode(contents);
+    const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+      .map(value => value.toString(16).padStart(2, "0")).join("");
+    const batch = {
+      batch_seq: batchSeq,
+      node_id: payload.node_id,
+      first_sequence: payload.first_sequence,
+      last_sequence: payload.last_sequence,
+      reading_count: readings.length,
+      sealed_at: payload.sealed_at,
+      file_name: `browser-batch-${batchSeq}.json`,
+      sha256_hex: hash,
+      browser_generated: true,
+      anchor_verified: false,
+    };
+    rememberBatches([batch]);
+    if (!savedBatches().some(item => item.sha256_hex === hash) || !rememberBatchFile(hash, contents)) {
+      throw new Error("浏览器空间不足，未能保存批次原文件；请清理空间后重试。");
+    }
+    storageWrite(localBatchNumberKey, String(batchSeq));
+    storageWrite(lastSealedSequenceKey, String(payload.last_sequence));
+    batchList = savedBatches();
+    renderBatches();
+    if (!automatic) {
+      setAnchorFeedback(`批次已保存 ${readings.length} 条采样，SHA-256：0x${hash.slice(0, 16)}…；现在可下载 JSON 并点击“上链”。`, { stage: "ready", sha256Hex: hash });
+      showToast("可上链批次已生成，原始 JSON 已保存在此浏览器。", false);
+    }
+    return batch;
+  };
 
 async function loadEthers() {
   if (typeof window.ethers !== "undefined") return true;
@@ -220,8 +301,9 @@ function renderBatches() {
     return;
   }
   const anchors = savedAnchors();
-  for (const originalBatch of batchList) {
+  for (const originalBatch of [...batchList].sort((a, b) => Date.parse(b.sealed_at) - Date.parse(a.sealed_at))) {
     const batch = anchors[originalBatch.sha256_hex] ? { ...originalBatch, ...anchors[originalBatch.sha256_hex] } : originalBatch;
+    const cachedFile = savedBatchFiles()[batch.sha256_hex];
     const row = document.createElement("tr");
     for (const value of [`#${String(batch.batch_seq).padStart(6, "0")}`, time(batch.sealed_at), batch.reading_count]) {
       const cell = document.createElement("td");
@@ -238,28 +320,35 @@ function renderBatches() {
     const chainCell = document.createElement("td");
     if (batch.anchor_verified) {
       const link = document.createElement("a");
-      link.href = `${chainConfig?.explorer_url || ""}/tx/0x${batch.anchor_tx}`;
+      link.href = `${chainConfig?.explorer_url || "https://scan.botchain.ai"}/tx/${transactionHash(batch.anchor_tx)}`;
       link.target = "_blank";
       link.rel = "noopener";
-      link.textContent = "已上链";
+      link.textContent = "✓ 已上链 · 查看交易 ↗";
       link.className = "verify-ok";
       chainCell.append(link);
+    } else if (batch.cached_only && !cachedFile) {
+      const missing = document.createElement("span");
+      missing.className = "cache-status";
+      missing.textContent = "原文件缺失 · 暂不可上链";
+      missing.title = "仅有 SHA-256 无法还原原始文件；请生成新的可上链批次。";
+      chainCell.append(missing);
     } else {
       const btn = document.createElement("button");
       btn.className = "button primary";
       btn.style.padding = "5px 10px";
       btn.style.fontSize = "10px";
       btn.textContent = "上链";
-      btn.addEventListener("click", () => anchorBatch(batch));
+      btn.addEventListener("click", () => anchorBatch(batch, btn));
       chainCell.append(btn);
     }
     row.append(chainCell);
     const fileCell = document.createElement("td");
-    const cachedFile = savedBatchFiles()[batch.sha256_hex];
-    if (batch.cached_only) {
+    if (batch.cached_only || batch.browser_generated) {
       const cacheLabel = document.createElement("span");
       cacheLabel.className = "cache-status";
-      cacheLabel.textContent = cachedFile ? "本机缓存 · JSON 可下载" : "本机缓存 · 仅指纹";
+      cacheLabel.textContent = cachedFile
+        ? batch.browser_generated ? "本机生成 · 原文件已保存" : "本机缓存 · JSON 可下载"
+        : "本机缓存 · 仅指纹";
       cacheLabel.title = cachedFile
         ? "JSON 文件保存在当前浏览器，可随时下载。"
         : "本机保存了批次编号和哈希；原始 JSON 未缓存或已清理。";
@@ -407,11 +496,14 @@ async function initChain() {
   return chainReady;
 }
 
-async function anchorBatch(batch) {
+async function anchorBatch(batch, button) {
   if (typeof window.ethereum === "undefined") {
     alert("当前浏览器未检测到 MetaMask，请在安装了 MetaMask 的 Chrome 或 Edge 中打开在线 Demo。");
     return;
   }
+  let submittedTxHash = "";
+  button.disabled = true;
+  button.textContent = "准备中…";
   try {
     if (!savedBatchFiles()[batch.sha256_hex]) {
       await downloadBatchJson(batch);
@@ -419,6 +511,7 @@ async function anchorBatch(batch) {
         throw new Error("上链前请先下载并缓存该批次的原始 JSON；仅有指纹无法供评审验证。");
       }
     }
+    setAnchorFeedback(`正在连接 MetaMask，准备提交批次 ${batch.browser_generated ? "本机" : "#"}${batch.batch_seq} 的指纹…`, { stage: "pending", sha256Hex: batch.sha256_hex });
     await initChain();
     if (!(await loadEthers())) throw new Error("区块链库加载失败，请检查网络后重试。");
     const { provider: web3Provider, signer } = await SensorWallet.connect(chainConfig);
@@ -427,29 +520,43 @@ async function anchorBatch(batch) {
     if (owner.toLowerCase() !== submitter.toLowerCase()) {
       throw new Error("当前钱包不是数据存证合约 owner；请切换部署合约的钱包账户。");
     }
+    setAnchorFeedback("请在 MetaMask 中确认 BOT Chain 主网交易。", { stage: "pending", sha256Hex: batch.sha256_hex });
     const contract = new ethers.Contract(chainConfig.contract_address, chainAbi, signer);
     const dataHash = "0x" + batch.sha256_hex;
     ui.error.hidden = true;
     const tx = await contract.recordData(chainConfig.stream_id, dataHash, batch.file_name);
+    submittedTxHash = tx.hash;
+    button.textContent = "等待确认…";
+    setAnchorFeedback("交易已提交，正在等待 BOT Chain 区块确认。", { stage: "pending", txHash: tx.hash, sha256Hex: batch.sha256_hex });
     ui.error.hidden = false;
     ui.error.textContent = `交易已提交: ${tx.hash}，等待区块确认…`;
-    await tx.wait();
-    await request(`/api/batches/${batch.batch_seq}/anchor`, {
+    const receipt = await tx.wait();
+    if (receipt?.status !== 1) throw new Error("交易未成功执行，请在区块浏览器检查回执。");
+    setAnchorFeedback(`交易已进入区块 #${receipt.blockNumber}，正在核对合约事件与文件指纹。`, { stage: "pending", txHash: tx.hash, blockNumber: receipt.blockNumber, sha256Hex: batch.sha256_hex });
+    const proof = await request(`/api/batches/${batch.batch_seq}/anchor`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tx_hash: tx.hash, sha256_hex: batch.sha256_hex, file_name: batch.file_name }),
     });
+    if (!proof.anchor_verified) throw new Error("交易已确认，但后端未通过存证核验。");
     const anchors = savedAnchors();
     anchors[batch.sha256_hex] = { anchor_tx: tx.hash.replace(/^0x/, ""), anchor_verified: true, file_name: batch.file_name };
     storageWrite(anchorsStorageKey, JSON.stringify(anchors));
     batch.anchor_tx = tx.hash.replace(/^0x/, "");
     batch.anchor_verified = true;
     ui.error.hidden = true;
+    setAnchorFeedback(`区块 #${receipt.blockNumber} · SHA-256 0x${batch.sha256_hex.slice(0, 16)}… 已由链上事件核对。可下载 JSON 到“验证文件”页复核。`, { stage: "confirmed", txHash: tx.hash, blockNumber: receipt.blockNumber, sha256Hex: batch.sha256_hex });
+    showToast("BOT Chain 主网存证成功，可点击交易链接查看。", false);
     renderBatches();
     await refresh();
   } catch (error) {
     ui.error.hidden = false;
-    ui.error.textContent = `上链失败: ${error.message || error}`;
+    ui.error.textContent = `${submittedTxHash ? "交易已提交，但页面核验未完成" : "尚未完成上链"}: ${error.message || error}`;
+    setAnchorFeedback(submittedTxHash
+      ? "交易已提交；请先打开区块浏览器查看真实状态，避免重复提交。"
+      : `尚未提交链上交易：${error.message || error}`, { stage: "pending", txHash: submittedTxHash, sha256Hex: batch.sha256_hex });
+    button.disabled = false;
+    button.textContent = "上链";
   }
 }
 
@@ -599,7 +706,7 @@ async function refresh() {
     ui.sample.disabled = actionBusy;
     ui.sample.innerHTML = "<span>＋</span> 采样一次";
     ui.seal.disabled = actionBusy;
-    ui.seal.textContent = "立即打包批次";
+    ui.seal.textContent = snapshot.sampling_mode === "browser" ? "生成可上链批次" : "立即打包批次";
     void refreshAccess();
   } catch (error) {
     if (version !== refreshVersion) return;
@@ -627,10 +734,7 @@ async function poll() {
       applyBrowserSample(reading);
       if (Date.now() - lastAutoSealAt >= 60000) {
         lastAutoSealAt = Date.now();
-        try {
-          const batch = await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-          if (batch.batch_file_base64) await cacheOriginalBatch(batch, batch.batch_file_base64);
-        }
+        try { await sealBrowserBatch(true); }
         catch (error) { actionError = `批次自动打包未完成：${error.message}`; }
         await refresh();
       }
@@ -688,7 +792,18 @@ ui.toggle.addEventListener("click", () => {
 ui["sample-json"].addEventListener("click", downloadPreviewJson);
 window.addEventListener("sensor-wallet-changed", () => ui["wallet-logout"].click());
 ui.sample.addEventListener("click", () => action("/api/sample", {}));
-ui.seal.addEventListener("click", () => action("/api/batches/seal", {}));
+ui.seal.addEventListener("click", async () => {
+  if (snapshot?.sampling_mode !== "browser") {
+    action("/api/batches/seal", {});
+    return;
+  }
+  if (actionBusy) return;
+  actionBusy = true;
+  ui.seal.disabled = true;
+  try { await sealBrowserBatch(); }
+  catch (error) { showToast(`批次生成失败：${error.message || error}`, true); }
+  finally { actionBusy = false; ui.seal.disabled = false; }
+});
 ui["wallet-login"]?.addEventListener("click", walletLogin);
 ui["wallet-logout"]?.addEventListener("click", async () => {
   try {
@@ -717,6 +832,10 @@ document.querySelectorAll("[data-metric]").forEach(button => button.addEventList
 }));
 if (window.ResizeObserver) new ResizeObserver(drawChart).observe(ui.chart);
 else window.addEventListener("resize", drawChart);
+const previousProof = parseObject(storageRead(anchorFeedbackStorageKey, "{}"), {});
+if (previousProof.stage === "confirmed" && previousProof.txHash) {
+  setAnchorFeedback(previousProof.message, previousProof);
+}
 poll();
 void initChain().catch(error => console.warn("BOT Chain 配置加载失败:", error));
 refreshAccess();

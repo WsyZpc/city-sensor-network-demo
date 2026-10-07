@@ -45,6 +45,7 @@ async function browserSamplingSurvivesOldServerSnapshots() {
       this.clientHeight = 260;
       this.children = [];
       this.listeners = {};
+      this.style = {};
       this.classList = { add() {}, remove() {}, toggle() {} };
     }
     replaceChildren() { this.children = []; }
@@ -76,9 +77,12 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   });
   let sampleCount = 0;
   let walletConnected = false;
+  let submittedHash = '';
+  const txHash = '0x' + 'a'.repeat(64);
   const batchJson = '{"readings":[]}';
   const batchHash = createHash('sha256').update(batchJson).digest('hex');
-  const demoBatch = { batch_seq: 1, file_name: 'batch-000001.json', sha256_hex: batchHash };
+  const demoBatch = { batch_seq: 1, file_name: 'batch-000001.json', sha256_hex: batchHash,
+    reading_count: 1, sealed_at: new Date(base).toISOString() };
   const fetch = async (url, options = {}) => {
     let body;
     if (url.startsWith('/api/readings')) {
@@ -87,6 +91,8 @@ async function browserSamplingSurvivesOldServerSnapshots() {
     } else if (url === '/api/sample' && options.method === 'POST') {
       sampleCount += 1;
       body = reading(13, 3 + sampleCount);
+    } else if (url.endsWith('/anchor') && options.method === 'POST') {
+      body = { anchor_verified: true };
     } else if (url.startsWith('/api/batches')) body = {
       batches: [demoBatch],
       ...(url.includes('include_files=true') ? { batch_files: { [batchHash]: Buffer.from(batchJson).toString('base64') } } : {}),
@@ -116,11 +122,21 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   await elements.get('wallet-login').listeners.click();
   assert.match(elements.get('error').textContent, /未检测到 MetaMask/);
   window.ethereum = {};
-  window.ethers = {};
+  const ethers = { Contract: class {
+    async owner() { return '0x' + '1'.repeat(40); }
+    async recordData(_streamId, dataHash, _fileName) {
+      submittedHash = dataHash;
+      return { hash: txHash, wait: async () => ({ status: 1, blockNumber: 12345 }) };
+    }
+  } };
+  window.ethers = ethers;
+  context.ethers = ethers;
   const SensorWallet = { async connect(config) {
     assert.equal(config.chain_id_decimal, 677);
     walletConnected = true;
-    return { address: '0x' + '1'.repeat(40), signer: { signMessage: async () => '0xsignature' } };
+    return { address: '0x' + '1'.repeat(40), provider: {}, signer: {
+      signMessage: async () => '0xsignature', getAddress: async () => '0x' + '1'.repeat(40),
+    } };
   } };
   window.SensorWallet = SensorWallet;
   context.SensorWallet = SensorWallet;
@@ -130,6 +146,23 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   await new Promise(resolve => setTimeout(resolve, 100));
   const cached = JSON.parse(saved.get('city-sensor-network:batch-json'));
   assert.equal(cached[batchHash], batchJson, 'Authorized listing must preserve verified original JSON');
+  await elements.get('seal').listeners.click();
+  const browserBatch = JSON.parse(saved.get('city-sensor-network:batches'))
+    .find(batch => batch.browser_generated);
+  assert.ok(browserBatch, 'Online seal must create a browser-owned batch');
+  const browserJson = JSON.parse(saved.get('city-sensor-network:batch-json'))[browserBatch.sha256_hex];
+  assert.ok(browserJson, 'Browser-owned batch must preserve the original JSON before anchoring');
+  assert.equal(createHash('sha256').update(browserJson).digest('hex'), browserBatch.sha256_hex);
+  assert.ok(JSON.parse(browserJson).readings.length >= 2);
+  assert.match(elements.get('anchor-feedback').children[1].textContent, /现在可下载 JSON/);
+  const localRow = elements.get('batches').children
+    .find(row => row.children[3]?.children[0]?.title === '0x' + browserBatch.sha256_hex);
+  assert.ok(localRow);
+  await localRow.children[4].children[0].listeners.click();
+  assert.equal(submittedHash, '0x' + browserBatch.sha256_hex);
+  assert.match(elements.get('anchor-feedback').children[0].textContent, /主网存证成功/);
+  assert.match(elements.get('anchor-feedback').children[2].href, /scan\.botchain\.ai\/tx\/0x/);
+  assert.equal(JSON.parse(saved.get('city-sensor-network:anchors'))[browserBatch.sha256_hex].anchor_verified, true);
 }
 
 (async () => {
