@@ -254,6 +254,10 @@ def sample_once():
 
 @app.get("/api/batches")
 def list_batches(limit: int = Query(default=10, ge=1, le=200)):
+    if os.environ.get("VERCEL") == "1" and not batches.list_recent(1):
+        for _ in range(12):
+            store.capture()
+        batches.seal()
     return {"batches": batches.list_recent(limit)}
 
 

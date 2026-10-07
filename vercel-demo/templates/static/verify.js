@@ -43,16 +43,21 @@ async function verifyFile() {
         alert('请选择一个批次 JSON 文件。');
         return;
     }
-    if (!provider || !chainConfig) {
-        alert('链配置未加载，请刷新页面重试。');
-        return;
-    }
     ui.verify.disabled = true;
     ui.verify.textContent = '验证中…';
     try {
         const buffer = await file.arrayBuffer();
         const hash = await sha256Hex(buffer);
         const dataHashBytes32 = '0x' + hash;
+        let payload;
+        try {
+            payload = JSON.parse(new TextDecoder().decode(buffer));
+        } catch {
+            throw new Error('文件不是有效的 JSON，无法验证。');
+        }
+        if (!payload || !Array.isArray(payload.readings) || !Number.isInteger(payload.batch_seq)) {
+            throw new Error('JSON 缺少批次号或 readings 数组，无法验证。');
+        }
 
         ui.fileName.textContent = file.name;
         ui.fileSize.textContent = `${file.size} 字节`;
@@ -66,14 +71,20 @@ async function verifyFile() {
         ui.verifyResult.hidden = false;
 
         const metadataResponse = await fetch(`/api/hash/${hash}`, { cache: 'no-store' });
-        if (!metadataResponse.ok) throw new Error('这个文件指纹不在当前项目的批次记录中。');
-        const batch = await metadataResponse.json();
-        if (!batch.anchor_verified || !batch.anchor_tx) {
-            ui.chainStatus.textContent = '项目记录中尚无已核实的链上交易';
-            ui.verifyStatus.textContent = '✗ 文件尚无可验证的链上存证';
-            ui.verifyStatus.className = 'verify-bad';
+        if (!metadataResponse.ok) {
+            ui.chainStatus.textContent = '当前实例没有这份文件的链上记录';
+            ui.verifyStatus.textContent = '✓ 文件格式和 SHA-256 完整性验证通过；暂未找到链上存证';
+            ui.verifyStatus.className = 'verify-ok';
             return;
         }
+        const batch = await metadataResponse.json();
+        if (!batch.anchor_verified || !batch.anchor_tx) {
+            ui.chainStatus.textContent = '文件指纹已登记，等待链上存证';
+            ui.verifyStatus.textContent = '✓ 文件格式和 SHA-256 完整性验证通过；尚无已核实链上交易';
+            ui.verifyStatus.className = 'verify-ok';
+            return;
+        }
+        if (!provider || !chainConfig) throw new Error('链配置未加载，请刷新页面重试。');
 
         const receipt = await provider.getTransactionReceipt(`0x${batch.anchor_tx}`);
         if (!receipt || receipt.status !== 1) throw new Error('存证交易暂时无法读取或未成功确认。');
