@@ -1,7 +1,7 @@
 "use strict";
 
 function initApp() {
-  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "anchor-stage", "toast"].map(id => [id, document.getElementById(id)]));
+  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "anchor-stage", "toast"].map(id => [id, document.getElementById(id)]));
   const diagnostic = msg => {
     if (ui.diagnostic) ui.diagnostic.textContent = msg;
   };
@@ -266,6 +266,37 @@ function renderBatches() {
       showToast(error.message || "JSON 下载失败，请稍后重试。", true);
     }
   }
+
+  function downloadPreviewJson() {
+    const readings = snapshot?.readings || [];
+    if (!readings.length) {
+      showToast("暂无采样数据，请稍等片刻再试。", true);
+      return;
+    }
+    const rows = readings.slice(-10).map(({ sequence, recorded_at, pm25_ug_m3, noise_db }) => ({
+      sequence, recorded_at, pm25_ug_m3, noise_db,
+    }));
+    const sample = {
+      batch_seq: 0,
+      node_id: "wuhan-demo-001",
+      first_sequence: rows[0].sequence,
+      last_sequence: rows.at(-1).sequence,
+      reading_count: rows.length,
+      sealed_at: new Date().toISOString(),
+      source: "simulated_preview",
+      readings: rows,
+    };
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = "sensor-preview-test.json";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    showToast("测试 JSON 已下载，可用于验证页面试跑；它没有对应的链上存证。", false);
+  }
   const verifiedBatches = batchList.filter(batch => batch.anchor_verified).length;
   if (ui["anchor-stage"]) {
     ui["anchor-stage"].textContent = verifiedBatches
@@ -409,6 +440,7 @@ async function refreshAccess(force = false) {
 
 function render() {
   const latest = snapshot.readings.at(-1);
+  ui["sample-json"].disabled = !snapshot.readings.length;
   ui.pm25.textContent = latest ? latest.pm25_ug_m3.toFixed(1) : "—";
   ui.noise.textContent = latest ? latest.noise_db.toFixed(1) : "—";
   ui.total.textContent = rememberTotal(snapshot.total).toLocaleString("zh-CN");
@@ -530,6 +562,7 @@ ui.toggle.addEventListener("click", () => {
     action("/api/simulator", { running: !snapshot.sampling });
   }
 });
+ui["sample-json"].addEventListener("click", downloadPreviewJson);
 window.addEventListener("sensor-wallet-changed", () => ui["wallet-logout"].click());
 ui.sample.addEventListener("click", () => action("/api/sample", {}));
 ui.seal.addEventListener("click", () => action("/api/batches/seal", {}));
