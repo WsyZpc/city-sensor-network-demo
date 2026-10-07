@@ -123,7 +123,12 @@ def verify_page():
 
 
 def session_address(request: Request) -> str | None:
-    return wallet_sessions.get_address(request.cookies.get("sensor_session"))
+    return wallet_sessions.get_address(
+        request.cookies.get("sensor_session"),
+        domain=request.url.netloc,
+        uri=f"{request.url.scheme}://{request.url.netloc}",
+        chain_id=int(CHAIN_CONFIG["chain_id_decimal"]),
+    )
 
 
 def required_address(request: Request) -> str:
@@ -177,9 +182,17 @@ def auth_verify(body: WalletSignature, request: Request, response: Response):
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     token = request.cookies.get("sensor_challenge")
-    if body.message:
+    if not token and body.message:
         token = "v1." + base64.urlsafe_b64encode(body.message.encode("utf-8")).decode("ascii").rstrip("=")
-    session = wallet_sessions.consume_challenge(token or "", address, body.signature)
+    session = wallet_sessions.consume_challenge(
+        token or "",
+        address,
+        body.signature,
+        body.message,
+        domain=request.url.netloc,
+        uri=f"{request.url.scheme}://{request.url.netloc}",
+        chain_id=int(CHAIN_CONFIG["chain_id_decimal"]),
+    )
     if session is None:
         raise HTTPException(status_code=401, detail="签名无效或登录请求已过期，请重新连接钱包。")
     set_auth_cookie(response, request, "sensor_session", session, wallet_sessions.ttl_seconds)

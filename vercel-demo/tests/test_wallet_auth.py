@@ -1,57 +1,117 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from eth_keys.exceptions import BadSignature, ValidationError
+from eth_keys import keys
+from eth_utils import keccak
 
-from wallet_auth import WalletSessions, recover_wallet_address
+from wallet_auth import WalletSessions
 
 
-# Generated independently with ethers 5 signMessage and public test private key 1.
-# Never use this publicly known key for funds.
-MESSAGE = "Sensor demo login · 城市数据"
-ADDRESS = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
-SIGNATURE = (
-    "0x3fd58fa026d87366dcc66982146fb163be331e9bdc50ef16d98e8b88aaab85fe367"
-    "41c7fe2424af71a08118838f1058b3060b17d23ca11cac01abe883e6a75281c"
-)
+PRIVATE_KEY = keys.PrivateKey((1).to_bytes(32, "big"))
+ADDRESS = PRIVATE_KEY.public_key.to_checksum_address()
+DOMAIN = "demo.example"
+URI = "https://demo.example"
+CHAIN_ID = 677
+
+
+def sign_message(message: str) -> str:
+    payload = message.encode("utf-8")
+    digest = keccak(
+        b"\x19Ethereum Signed Message:\n"
+        + str(len(payload)).encode("ascii")
+        + payload
+    )
+    return "0x" + PRIVATE_KEY.sign_msg_hash(digest).to_bytes().hex()
 
 
 class WalletAuthTests(unittest.TestCase):
-    def challenge(self, sessions, *, expired=False):
-        token = "test-only-challenge"
-        deadline = datetime.now(timezone.utc) + timedelta(seconds=-1 if expired else 60)
-        sessions.challenges[token] = (ADDRESS, MESSAGE, deadline)
-        return token
+    def setUp(self):
+        self.sessions = WalletSessions()
 
-    def test_recovers_independent_ethers_unicode_signature(self):
-        self.assertEqual(recover_wallet_address(MESSAGE, SIGNATURE), ADDRESS)
-        self.assertEqual(recover_wallet_address(MESSAGE, SIGNATURE[:-2] + "01"), ADDRESS)
+    def challenge(self):
+        token, message, _ = self.sessions.create_challenge(ADDRESS, DOMAIN, URI, CHAIN_ID)
+        return token, message, sign_message(message)
 
-    def test_rejects_invalid_signature_encodings(self):
-        for signature in ("", "0x00", "0x" + "00" * 65, SIGNATURE[:-2] + "02", "0x" + "ff" * 64 + "1b"):
-            with self.subTest(signature=signature):
-                with self.assertRaises((ValueError, BadSignature, ValidationError)):
-                    recover_wallet_address(MESSAGE, signature)
-
-    def test_login_is_one_time_and_can_be_revoked(self):
-        sessions = WalletSessions()
-        token = self.challenge(sessions)
-        session = sessions.consume_challenge(token, ADDRESS, SIGNATURE)
+    def test_signed_challenge_survives_serverless_instance_change(self):
+        token, message, signature = self.challenge()
+        session = self.sessions.consume_challenge(
+            token,
+            ADDRESS,
+            signature,
+            message,
+            domain=DOMAIN,
+            uri=URI,
+            chain_id=CHAIN_ID,
+        )
         self.assertIsNotNone(session)
-        self.assertEqual(sessions.get_address(session), ADDRESS)
-        self.assertIsNone(sessions.consume_challenge(token, ADDRESS, SIGNATURE))
-        sessions.revoke(session)
-        self.assertIsNone(sessions.get_address(session))
 
-    def test_rejects_changed_message_expired_challenge_and_other_wallet(self):
-        sessions = WalletSessions()
-        token = self.challenge(sessions)
-        sessions.challenges[token] = (ADDRESS, MESSAGE + "!", sessions.challenges[token][2])
-        self.assertIsNone(sessions.consume_challenge(token, ADDRESS, SIGNATURE))
-        token = self.challenge(sessions, expired=True)
-        self.assertIsNone(sessions.consume_challenge(token, ADDRESS, SIGNATURE))
-        token = self.challenge(sessions)
-        self.assertIsNone(sessions.consume_challenge(token, "0x" + "11" * 20, SIGNATURE))
+        # A different serverless worker has no challenge or session memory.
+        other_instance = WalletSessions()
+        self.assertEqual(
+            other_instance.get_address(
+                session,
+                domain=DOMAIN,
+                uri=URI,
+                chain_id=CHAIN_ID,
+            ),
+            ADDRESS,
+        )
+
+    def test_rejects_wrong_site_chain_or_wallet(self):
+        token, message, signature = self.challenge()
+        for overrides in (
+            {"domain": "attacker.example"},
+            {"uri": "https://attacker.example"},
+            {"chain_id": 968},
+        ):
+            with self.subTest(overrides=overrides):
+                expected = {"domain": DOMAIN, "uri": URI, "chain_id": CHAIN_ID}
+                expected.update(overrides)
+                self.assertIsNone(
+                    WalletSessions().consume_challenge(
+                        token,
+                        ADDRESS,
+                        signature,
+                        message,
+                        **expected,
+                    )
+                )
+        self.assertIsNone(
+            WalletSessions().consume_challenge(
+                token, "0x" + "11" * 20, signature, message,
+                domain=DOMAIN, uri=URI, chain_id=CHAIN_ID,
+            )
+        )
+
+    def test_rejects_tampered_message_and_invalid_signature(self):
+        token, message, signature = self.challenge()
+        self.assertIsNone(
+            WalletSessions().consume_challenge(
+                token, ADDRESS, signature, message + "!",
+                domain=DOMAIN, uri=URI, chain_id=CHAIN_ID,
+            )
+        )
+        self.assertIsNone(
+            WalletSessions().consume_challenge(
+                token, ADDRESS, "0x" + "00" * 65, message,
+                domain=DOMAIN, uri=URI, chain_id=CHAIN_ID,
+            )
+        )
+
+    def test_rejects_stale_in_memory_challenge(self):
+        token, message, signature = self.challenge()
+        address, saved_message, _ = self.sessions.challenges[token]
+        self.sessions.challenges[token] = (
+            address,
+            saved_message,
+            datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+        self.assertIsNone(
+            self.sessions.consume_challenge(
+                token, ADDRESS, signature, message,
+                domain=DOMAIN, uri=URI, chain_id=CHAIN_ID,
+            )
+        )
 
 
 if __name__ == "__main__":

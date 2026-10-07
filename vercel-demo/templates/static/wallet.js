@@ -9,8 +9,6 @@ window.SensorWallet = (() => {
     if (!selected) throw new Error("未检测到钱包。请在安装并启用 MetaMask 的 Chrome/Edge 中打开此网址。");
     connecting = true;
     try {
-      let accounts = await selected.request({ method: "eth_requestAccounts" });
-      if (!accounts?.length) throw new Error("钱包没有授权任何账户。请解锁 MetaMask，并在连接此网站时勾选一个账户。");
       const chainId = config.chain_id_hex;
       if ((await selected.request({ method: "eth_chainId" })).toLowerCase() !== chainId.toLowerCase()) {
         try {
@@ -27,8 +25,7 @@ window.SensorWallet = (() => {
           await selected.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });
         }
       }
-      // Switching networks can change the account permissions exposed by a wallet.
-      accounts = await selected.request({ method: "eth_requestAccounts" });
+      const accounts = await selected.request({ method: "eth_requestAccounts" });
       if (!accounts?.length) throw new Error("切换网络后未获取到账户，请在 MetaMask 中重新授权本站。");
       if ((await selected.request({ method: "eth_chainId" })).toLowerCase() !== chainId.toLowerCase()) {
         throw new Error(`请切换到 ${config.chain_name}（Chain ID ${config.chain_id_decimal}）。`);

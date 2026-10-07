@@ -32,7 +32,7 @@ class BotChain:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 body = json.loads(response.read())
         except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError) as error:
-            raise ChainError("暂时无法连接 BOT Chain 测试网，请稍后重试。") from error
+            raise ChainError(f"暂时无法连接 {self.config.get('chain_name', 'BOT Chain')}，请稍后重试。") from error
         if body.get("error"):
             detail = body["error"].get("message", "RPC 请求失败。")
             raise ChainError(f"BOT Chain RPC：{detail}")

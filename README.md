@@ -2,7 +2,7 @@
 
 在线 Demo：<https://city-sensor-network-demo.vercel.app/>
 
-一个面向环保数据可信采集的黑客松 Demo：模拟城市空气质量和噪音采样，将读数定时封装为数据批次，对批次文件计算 SHA-256 指纹，并将指纹提交到 BOT Chain 测试网。订阅者可按链上订阅状态获取完整数据文件，并独立校验文件是否在存证后被修改。
+一个面向环保数据可信采集的黑客松 Demo：模拟城市空气质量和噪音采样，将读数定时封装为数据批次，对批次文件计算 SHA-256 指纹，并将指纹提交到 BOT Chain。GitHub 根目录中的本地原型默认连接测试网；线上 Vercel 版本连接 BOT Chain 主网。订阅者可按链上订阅状态获取完整数据文件，并独立校验文件是否在存证后被修改。
 
 > **演示范围：** 当前读数由 Python 模拟生成，没有连接真实传感器。这个 Demo 展示数据打包、链上存证、钱包订阅和文件校验的产品流程，不代表已完成真实设备接入、硬件防作弊或城市级节点铺设。
 
@@ -22,7 +22,7 @@
 
 1. 后端每 5 秒生成一条模拟 PM2.5 和噪音数据，并保存到本地 SQLite。
 2. 每分钟把新增读数封装成不可变 JSON 批次，计算文件原始字节的 SHA-256。
-3. 在工作台连接 MetaMask 测试网钱包，由存证账户提交批次哈希。
+3. 在工作台连接 MetaMask；本地原型使用测试网，线上版本使用主网，由存证账户提交批次哈希。
 4. 后端读取链上交易回执，核对合约、数据流、文件名和文件哈希。
 5. 数据购买者在订阅页查看价格并通过钱包购买订阅；后端按实时链上权限限制完整数据下载。
 6. 验证页重新计算所选批次文件的指纹，并对照已核验的链上交易事件。
@@ -44,6 +44,8 @@ python -m venv .venv
 
 打开 <http://127.0.0.1:8000>。保持终端运行，按 `Ctrl+C` 停止服务。
 
+GitHub 仓库网页只展示源码，不会直接运行 FastAPI。Windows 上请在克隆后的仓库根目录打开 PowerShell，执行上面的命令后再访问本地地址。本地原型默认使用 BOT Chain Testnet（Chain ID 968）；线上评审使用上方 Vercel 链接和 BOT Chain Mainnet（Chain ID 677）。
+
 macOS / Linux：
 
 ```bash
@@ -57,7 +59,7 @@ python3 -m venv .venv
 
 如果 8000 端口已被占用，Windows PowerShell 可运行 `$env:SENSOR_PORT = '8001'`，macOS / Linux 可运行 `export SENSOR_PORT=8001`，然后重新启动并访问 `http://127.0.0.1:8001`。
 
-## 钱包与测试网
+## 本地钱包与测试网
 
 - 钱包：使用支持 EVM 的 MetaMask，并切换到 BOT Chain Testnet。
 - Chain ID：`968`（十六进制 `0x3c8`）。
@@ -70,7 +72,7 @@ python3 -m venv .venv
 
 连接钱包时，Demo 会请求一次签名以证明钱包归属。该登录签名不发起交易、不支付 Gas。购买订阅或提交批次存证时会弹出单独的链上交易确认，由你在 MetaMask 中审核并确认。
 
-**合约源码说明：** `contracts/DataAttestation.sol` 是项目早期的存证合约草稿，不是上面已部署的 `SensorDataMarket` 合约源码。运行时按 `templates/static/abi.json` 与现有测试网合约交互；不要把草稿误认为已部署合约的可复现源码。
+**合约源码说明：** `contracts/DataAttestation.sol` 是项目早期的存证合约草稿，不是上面已部署的 `SensorDataMarket` 合约源码。根目录本地原型按 `templates/static/chain-config.json` 连接测试网；Vercel 副本按 `vercel-demo/templates/static/chain-config.json` 连接主网。不要把草稿误认为已部署合约的可复现源码。
 
 ## 页面
 
@@ -106,7 +108,7 @@ python3 -m venv .venv
 ## Demo 限制与后续工作
 
 - 所有读数都是模拟的，尚无真实硬件数据来源。
-- 钱包会话保存在本地服务内存中，服务重启后需重新登录。
-- BOT Chain 测试网合约是外部已部署合约；合约源码草稿与当前运行 ABI 不对应。
+- 线上登录凭证由钱包签名生成，有效期为 1 小时。
+- BOT Chain 主网合约是外部已部署合约；合约源码草稿与当前运行 ABI 不对应。
 - 评审前仍应使用 MetaMask 实际完成一次批次存证和订阅购买，并记录相应交易与部署材料。
-- 主网发布、传感器设备身份校验、质押防作弊、真实数据采购履约和长期节点运营均不包含在当前 Demo 中。
+- 传感器设备身份校验、质押防作弊、真实数据采购履约和长期节点运营均不包含在当前 Demo 中。

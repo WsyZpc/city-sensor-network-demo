@@ -2,7 +2,7 @@
 
 在线 Demo：<https://city-sensor-network-demo.vercel.app/>
 
-一个面向环保数据可信采集的黑客松 Demo：模拟城市空气质量和噪音采样，将读数定时封装为数据批次，对批次文件计算 SHA-256 指纹，并将指纹提交到 BOT Chain 测试网。订阅者可按链上订阅状态获取完整数据文件，并独立校验文件是否在存证后被修改。
+一个面向环保数据可信采集的黑客松 Demo：模拟城市空气质量和噪音采样，将读数定时封装为数据批次，对批次文件计算 SHA-256 指纹，并将指纹提交到 BOT Chain 主网。订阅者可按链上订阅状态获取完整数据文件，并独立校验文件是否在存证后被修改。
 
 > **演示范围：** 当前读数由 Python 模拟生成，没有连接真实传感器。这个 Demo 展示数据打包、链上存证、钱包订阅和文件校验的产品流程，不代表已完成真实设备接入、硬件防作弊或城市级节点铺设。
 
@@ -22,7 +22,7 @@
 
 1. 后端每 5 秒生成一条模拟 PM2.5 和噪音数据，并保存到本地 SQLite。
 2. 每分钟把新增读数封装成不可变 JSON 批次，计算文件原始字节的 SHA-256。
-3. 在工作台连接 MetaMask 测试网钱包，由存证账户提交批次哈希。
+3. 在工作台连接 MetaMask 主网钱包，由存证账户提交批次哈希。
 4. 后端读取链上交易回执，核对合约、数据流、文件名和文件哈希。
 5. 数据购买者在订阅页查看价格并通过钱包购买订阅；后端按实时链上权限限制完整数据下载。
 6. 验证页重新计算所选批次文件的指纹，并对照已核验的链上交易事件。
@@ -35,7 +35,7 @@
 
 ```powershell
 git clone https://github.com/WsyZpc/city-sensor-network-demo.git
-cd city-sensor-network-demo
+cd city-sensor-network-demo\vercel-demo
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -48,7 +48,7 @@ macOS / Linux：
 
 ```bash
 git clone https://github.com/WsyZpc/city-sensor-network-demo.git
-cd city-sensor-network-demo
+cd city-sensor-network-demo/vercel-demo
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
@@ -57,20 +57,19 @@ python3 -m venv .venv
 
 如果 8000 端口已被占用，Windows PowerShell 可运行 `$env:SENSOR_PORT = '8001'`，macOS / Linux 可运行 `export SENSOR_PORT=8001`，然后重新启动并访问 `http://127.0.0.1:8001`。
 
-## 钱包与测试网
+## 钱包与主网
 
-- 钱包：使用支持 EVM 的 MetaMask，并切换到 BOT Chain Testnet。
-- Chain ID：`968`（十六进制 `0x3c8`）。
-- RPC：`https://rpc.bohr.life`。
-- 原生代币：`BOT`。测试网代币仅用于测试。
-- 浏览器：<https://test.bohrchain.com>。
+- 钱包：使用支持 EVM 的 MetaMask，并切换到 BOT Chain Mainnet。
+- Chain ID：`677`（十六进制 `0x2a5`）。
+- RPC：`https://rpc.botchain.ai`。
+- 原生代币：`BOT`。
 - 合约地址：`0xC55793411e9fC98288bA09976D607cEAf94650bB`。
 - 数据流：`0`（Air Quality Wuhan；当前合约显示价格为 `0.0025 BOT/天`）。
 - 前端 ABI 与网络配置：[`templates/static/abi.json`](templates/static/abi.json)、[`templates/static/chain-config.json`](templates/static/chain-config.json)。
 
 连接钱包时，Demo 会请求一次签名以证明钱包归属。该登录签名不发起交易、不支付 Gas。购买订阅或提交批次存证时会弹出单独的链上交易确认，由你在 MetaMask 中审核并确认。
 
-**合约源码说明：** `contracts/DataAttestation.sol` 是项目早期的存证合约草稿，不是上面已部署的 `SensorDataMarket` 合约源码。运行时按 `templates/static/abi.json` 与现有测试网合约交互；不要把草稿误认为已部署合约的可复现源码。
+**合约源码说明：** `contracts/DataAttestation.sol` 是项目早期的存证合约草稿，不是上面已部署的 `SensorDataMarket` 合约源码。运行时按 `templates/static/abi.json` 与已部署主网合约交互；不要把草稿误认为已部署合约的可复现源码。
 
 ## 页面
 
@@ -107,15 +106,15 @@ python3 -m venv .venv
 
 - 所有读数都是模拟的，尚无真实硬件数据来源。
 - 钱包会话保存在本地服务内存中，服务重启后需重新登录。
-- BOT Chain 测试网合约是外部已部署合约；合约源码草稿与当前运行 ABI 不对应。
+- BOT Chain 主网合约是外部已部署合约；合约源码草稿与当前运行 ABI 不对应。
 - 评审前仍应使用 MetaMask 实际完成一次批次存证和订阅购买，并记录相应交易与部署材料。
-- 主网发布、传感器设备身份校验、质押防作弊、真实数据采购履约和长期节点运营均不包含在当前 Demo 中。
+- 传感器设备身份校验、质押防作弊、真实数据采购履约和长期节点运营均不包含在当前 Demo 中。
 
 ## Vercel 在线演示（本副本）
 
 此目录为 Vercel 适配副本；原项目根目录仍用于本地运行。将整个仓库导入 Vercel 时，把 **Root Directory** 设为 `vercel-demo`，其余使用默认设置即可，Vercel 会识别 `app.py` 中的 FastAPI `app`。
 
-Serverless 环境不保证后台循环持续运行，因此本版本在新实例启动时生成一小批模拟读数用于展示。数据与钱包会话保存在实例临时空间或内存中，实例重启后可能重置；它适合参赛演示，不适合作为生产数据服务。持久化部署需要外部数据库和共享会话存储。
+Serverless 环境不保证后台循环持续运行，因此本版本在新实例启动时生成一小批模拟读数用于展示。批次和读数保存在实例临时空间，实例重启后可能重置；钱包登录凭证由钱包签名生成，各实例都能验证，有效期为一小时。它适合参赛演示，不适合作为生产数据服务。持久化数据仍需要外部数据库。
 
 
 在线版控制台约每 1 秒调用一次云端采样接口，暂停按钮只控制当前页面。每次请求成功后，浏览器会把累计数加一，并保存已经见过的最大累计数，避免 Vercel 临时实例切换时显示回退。钱包连接使用 MetaMask 授权返回的地址，并在切换网络后重新读取授权账户。

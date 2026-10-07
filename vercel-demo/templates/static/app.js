@@ -161,8 +161,8 @@ function renderBatches() {
     row.append(chainCell);
     const fileCell = document.createElement("td");
     if (batch.cached_only) {
-      fileCell.textContent = "已缓存指纹";
-      fileCell.title = "该批次来自之前的临时实例，文件需在生成它的页面下载。";
+      fileCell.textContent = "本机缓存记录";
+      fileCell.title = "仅缓存了批次编号和 SHA-256 指纹，不包含 JSON 文件；链上状态请点击交易记录核验。";
     } else {
       const link = document.createElement("a");
       link.href = accessState?.can_download ? `/api/batches/${batch.batch_seq}/download` : "/subscribe";
@@ -258,18 +258,26 @@ async function walletLogin() {
   const button = ui["wallet-login"];
   if (!button) return;
   button.disabled = true;
+  const originalText = button.textContent;
+  button.textContent = "等待钱包确认…";
   actionError = "";
   try {
     const address = await signInWithWallet();
     diagnostic(`钱包已验证：${address.slice(0, 6)}…${address.slice(-4)}`);
-    await initChain();
+    accessState = { authenticated: true, address, owner_access: false, can_download: false };
+    ui["access-status"].textContent = "钱包已验证 · 正在查询订阅状态";
+    button.textContent = "钱包已连接";
+    button.hidden = true;
+    ui["wallet-logout"].hidden = false;
     accessLastChecked = 0;
-    await refreshAccess(true);
-    await refresh();
+    // Authentication is complete. Let the slower chain permission lookup
+    // finish in the background so the connect button responds immediately.
+    void refreshAccess(true).then(() => refresh());
   } catch (error) {
     actionError = `钱包登录失败：${error.message}`;
     ui.error.textContent = actionError;
     ui.error.hidden = false;
+    button.textContent = originalText;
   } finally {
     button.disabled = false;
   }
@@ -299,6 +307,7 @@ async function refreshAccess(force = false) {
       logout.hidden = false;
     }
   } catch (error) {
+    accessLastChecked = Date.now();
     pill.textContent = "链上订阅状态暂不可用";
     ui.error.textContent = error.message;
     ui.error.hidden = false;

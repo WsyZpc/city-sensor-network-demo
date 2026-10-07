@@ -4,6 +4,7 @@ import re
 import secrets
 import threading
 import base64
+import json
 from datetime import datetime, timedelta, timezone
 
 from eth_keys import keys
@@ -32,6 +33,11 @@ def recover_wallet_address(message: str, signature: str) -> str:
 
 
 class WalletSessions:
+    _STATEMENT = (
+        "Sign in to verify wallet ownership and request private sensor data. "
+        "This signature sends no transaction and spends no tokens."
+    )
+
     def __init__(self, ttl_seconds: int = 3600, challenge_seconds: int = 300):
         self.ttl_seconds = ttl_seconds
         self.challenge_seconds = challenge_seconds
@@ -55,14 +61,13 @@ class WalletSessions:
         message = (
             f"{domain} wants you to sign in with your Ethereum account:\n"
             f"{address}\n\n"
-            "Sign in to verify wallet ownership and request private sensor data. "
-            "This signature sends no transaction and spends no tokens.\n\n"
+            f"{self._STATEMENT}\n\n"
             f"URI: {uri}\n"
             "Version: 1\n"
             f"Chain ID: {chain_id}\n"
             f"Nonce: {nonce}\n"
             f"Issued At: {now.isoformat(timespec='seconds').replace('+00:00', 'Z')}\n"
-            f"Expiration Time: {(now + timedelta(seconds=self.challenge_seconds)).isoformat(timespec='seconds').replace('+00:00', 'Z')}"
+            f"Expiration Time: {(now + timedelta(seconds=self.ttl_seconds)).isoformat(timespec='seconds').replace('+00:00', 'Z')}"
         )
         token = secrets.token_urlsafe(32)
         with self._lock:
@@ -70,43 +75,131 @@ class WalletSessions:
             self.challenges[token] = (address, message, now + timedelta(seconds=self.challenge_seconds))
         return token, message, self.challenge_seconds
 
-    def consume_challenge(self, token: str, address: str, signature: str) -> str | None:
+    def consume_challenge(
+        self,
+        token: str,
+        address: str,
+        signature: str,
+        message: str | None = None,
+        *,
+        domain: str | None = None,
+        uri: str | None = None,
+        chain_id: int | None = None,
+    ) -> str | None:
         now = datetime.now(timezone.utc)
         with self._lock:
             item = self.challenges.pop(token, None)
-        if item is None and token.startswith("v1."):
-            # Vercel can route challenge and verify requests to different
-            # instances, so fall back to the signed challenge carried in the
-            # HttpOnly cookie when the in-memory entry is unavailable.
-            try:
+        if item is not None:
+            expected, signed_message, challenge_expiration = item
+            if message is not None and message != signed_message:
+                return None
+        else:
+            signed_message = message
+            if signed_message is None and token.startswith("v1."):
+                # Backward compatibility for challenge cookies issued before
+                # clients sent the signed message in the verify request.
                 encoded = token[3:]
                 encoded += "=" * (-len(encoded) % 4)
-                message = base64.urlsafe_b64decode(encoded.encode()).decode("utf-8")
-                expected = self.normalize_address(address)
-                account = re.search(r"account:\n(0x[0-9a-fA-F]{40})\n", message)
-                expiration = re.search(r"Expiration Time: ([^\n]+)", message)
-                if not account or self.normalize_address(account.group(1)).lower() != expected.lower() or not expiration:
+                try:
+                    signed_message = base64.urlsafe_b64decode(encoded.encode()).decode("utf-8")
+                except (ValueError, UnicodeError):
                     return None
-                expires_at = datetime.fromisoformat(expiration.group(1).replace("Z", "+00:00"))
-                item = (expected, message, expires_at)
-            except (ValueError, UnicodeError):
+            if signed_message is None:
                 return None
-        if item is None or item[2] <= now or item[0].lower() != address.lower():
+            expected = address
+            challenge_expiration = now + timedelta(seconds=self.challenge_seconds)
+
+        try:
+            expected = self.normalize_address(expected)
+            if expected.lower() != self.normalize_address(address).lower():
+                return None
+            parts = self._parse_message(signed_message)
+            if parts["address"].lower() != expected.lower():
+                return None
+            if domain is not None and parts["domain"] != domain:
+                return None
+            if uri is not None and parts["uri"] != uri:
+                return None
+            if chain_id is not None and int(parts["chain_id"]) != int(chain_id):
+                return None
+            issued_at = datetime.fromisoformat(parts["issued_at"].replace("Z", "+00:00"))
+            signed_expiration = datetime.fromisoformat(parts["expiration"].replace("Z", "+00:00"))
+        except (ValueError, TypeError, KeyError):
+            return None
+        if (
+            challenge_expiration <= now
+            or issued_at > now + timedelta(seconds=30)
+            or issued_at < now - timedelta(seconds=self.challenge_seconds)
+            or signed_expiration <= now
+            or signed_expiration > issued_at + timedelta(seconds=self.ttl_seconds)
+        ):
             return None
         try:
-            recovered = recover_wallet_address(item[1], signature)
+            recovered = recover_wallet_address(signed_message, signature)
         except (ValueError, TypeError, BadSignature, ValidationError):
             return None
-        if recovered.lower() != address.lower():
+        if recovered.lower() != expected.lower():
             return None
-        session = secrets.token_urlsafe(32)
-        with self._lock:
-            self.sessions[session] = (address, now + timedelta(seconds=self.ttl_seconds))
-        return session
+        # The signed challenge itself is a short-lived, domain-bound session
+        # proof. Every Vercel instance can validate it without shared memory.
+        proof = json.dumps(
+            {"message": signed_message, "signature": signature},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return "v2." + base64.urlsafe_b64encode(proof).decode("ascii").rstrip("=")
 
-    def get_address(self, session: str | None) -> str | None:
+    @classmethod
+    def _parse_message(cls, message: str) -> dict[str, str]:
+        pattern = (
+            r"(?P<domain>[^\s]+) wants you to sign in with your Ethereum account:\n"
+            r"(?P<address>0x[0-9a-fA-F]{40})\n\n"
+            + re.escape(cls._STATEMENT)
+            + r"\n\nURI: (?P<uri>https?://[^\s]+)\n"
+            r"Version: 1\n"
+            r"Chain ID: (?P<chain_id>[0-9]+)\n"
+            r"Nonce: (?P<nonce>[0-9a-f]{32})\n"
+            r"Issued At: (?P<issued_at>[0-9T:.+\-Z]+)\n"
+            r"Expiration Time: (?P<expiration>[0-9T:.+\-Z]+)"
+        )
+        match = re.fullmatch(pattern, message or "")
+        if not match:
+            raise ValueError("签名挑战格式无效。")
+        return match.groupdict()
+
+    def get_address(
+        self,
+        session: str | None,
+        *,
+        domain: str | None = None,
+        uri: str | None = None,
+        chain_id: int | None = None,
+    ) -> str | None:
         if not session:
             return None
+        if session.startswith("v2."):
+            try:
+                encoded = session[3:]
+                encoded += "=" * (-len(encoded) % 4)
+                payload = json.loads(base64.urlsafe_b64decode(encoded.encode()).decode("utf-8"))
+                message = payload["message"]
+                signature = payload["signature"]
+                parts = self._parse_message(message)
+                address = self.normalize_address(parts["address"])
+                if domain is not None and parts["domain"] != domain:
+                    return None
+                if uri is not None and parts["uri"] != uri:
+                    return None
+                if chain_id is not None and int(parts["chain_id"]) != int(chain_id):
+                    return None
+                now = datetime.now(timezone.utc)
+                issued_at = datetime.fromisoformat(parts["issued_at"].replace("Z", "+00:00"))
+                expires_at = datetime.fromisoformat(parts["expiration"].replace("Z", "+00:00"))
+                if issued_at > now + timedelta(seconds=30) or expires_at <= now or expires_at > issued_at + timedelta(seconds=self.ttl_seconds):
+                    return None
+                recovered = recover_wallet_address(message, signature)
+                return address if recovered.lower() == address.lower() else None
+            except (ValueError, UnicodeError, TypeError, KeyError, BadSignature, ValidationError):
+                return None
         now = datetime.now(timezone.utc)
         with self._lock:
             item = self.sessions.get(session)

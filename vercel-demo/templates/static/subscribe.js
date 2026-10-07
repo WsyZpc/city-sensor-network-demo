@@ -1,12 +1,5 @@
 'use strict';
 
-const BOT_CHAIN_TESTNET = {
-    chainId: '0x3c8',
-    chainName: 'BOT Chain Testnet',
-    nativeCurrency: { name: 'BOHR', symbol: 'BOT', decimals: 18 },
-    rpcUrls: ['https://rpc.bohr.life'],
-    blockExplorerUrls: ['https://test.bohrchain.com'],
-};
 const STREAM_ID = 0;
 
 const ui = {
