@@ -249,7 +249,7 @@ async function signInWithWallet() {
   await request("/api/auth/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, signature }),
+    body: JSON.stringify({ address, signature, message: challenge.message }),
   });
   return address;
 }

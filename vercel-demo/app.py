@@ -167,6 +167,7 @@ def auth_challenge(address: str, request: Request, response: Response):
 class WalletSignature(BaseModel):
     address: str
     signature: str
+    message: str | None = None
 
 
 @app.post("/api/auth/verify")
@@ -176,6 +177,8 @@ def auth_verify(body: WalletSignature, request: Request, response: Response):
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     token = request.cookies.get("sensor_challenge")
+    if body.message:
+        token = "v1." + base64.urlsafe_b64encode(body.message.encode("utf-8")).decode("ascii").rstrip("=")
     session = wallet_sessions.consume_challenge(token or "", address, body.signature)
     if session is None:
         raise HTTPException(status_code=401, detail="签名无效或登录请求已过期，请重新连接钱包。")

@@ -118,7 +118,7 @@ async function connectWallet() {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, signature }),
+            body: JSON.stringify({ address, signature, message: challenge.message }),
         });
         if (!loginResponse.ok) throw new Error((await loginResponse.json()).detail || '钱包签名登录失败。');
         await updateWalletInfo();
