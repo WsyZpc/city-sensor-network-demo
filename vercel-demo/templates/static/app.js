@@ -23,6 +23,11 @@ function initApp() {
     localStorage.setItem(totalStorageKey, String(remembered));
     return remembered;
   };
+  const countLocalSample = () => {
+    const next = storedTotal() + 1;
+    localStorage.setItem(totalStorageKey, String(next));
+    if (snapshot) snapshot.total = Math.max(Number(snapshot.total) || 0, next);
+  };
 
 async function loadEthers() {
   if (typeof window.ethers !== "undefined") return true;
@@ -337,6 +342,7 @@ async function poll() {
     lastAutoSampleAt = Date.now();
     try {
       await request("/api/sample", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      countLocalSample();
       if (Date.now() - lastAutoSealAt >= 60000) {
         await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         lastAutoSealAt = Date.now();
@@ -360,6 +366,7 @@ async function action(path, body) {
   ui.seal.disabled = true;
   try {
     await request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (path === "/api/sample") countLocalSample();
     actionBusy = false;
     await refresh();
   } catch (error) {
