@@ -24,6 +24,7 @@ from wallet_auth import WalletSessions
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = Path("/tmp/city-sensor-network-demo") if os.environ.get("VERCEL") == "1" else ROOT / "data"
 DATA_DIR = Path(os.environ.get("SENSOR_DATA_DIR", str(DEFAULT_DATA_DIR)))
+SAMPLING_INTERVAL_SECONDS = 2 if os.environ.get("VERCEL") == "1" else INTERVAL_SECONDS
 store = ReadingStore(DATA_DIR / "sensors.sqlite3")
 batches = BatchStore(DATA_DIR / "sensors.sqlite3", DATA_DIR / "batches")
 CHAIN_CONFIG = json.loads((ROOT / "templates" / "static" / "chain-config.json").read_text(encoding="utf-8"))
@@ -33,7 +34,7 @@ wallet_sessions = WalletSessions()
 
 async def sample_loop(app: FastAPI):
     while True:
-        await asyncio.sleep(INTERVAL_SECONDS)
+        await asyncio.sleep(SAMPLING_INTERVAL_SECONDS)
         if app.state.sampling:
             try:
                 await asyncio.to_thread(store.capture)
@@ -225,7 +226,7 @@ def readings(request: Request, limit: int = Query(default=3, ge=1, le=500)):
         "source": "simulated",
         "sampling": app.state.sampling,
         "sampling_error": app.state.sampling_error,
-        "interval_seconds": INTERVAL_SECONDS,
+        "interval_seconds": SAMPLING_INTERVAL_SECONDS,
         "sampling_mode": "browser" if os.environ.get("VERCEL") == "1" else "server",
         "anchored": False,
         "preview_only": preview_only,

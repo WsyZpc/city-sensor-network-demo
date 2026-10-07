@@ -16,6 +16,13 @@ function initApp() {
   let lastAutoSampleAt = 0;
   let lastAutoSealAt = Date.now();
   let actionError = "";
+  const totalStorageKey = "city-sensor-network:max-total";
+  const storedTotal = () => Number.parseInt(localStorage.getItem(totalStorageKey) || "0", 10) || 0;
+  const rememberTotal = total => {
+    const remembered = Math.max(storedTotal(), Number(total) || 0);
+    localStorage.setItem(totalStorageKey, String(remembered));
+    return remembered;
+  };
 
 async function loadEthers() {
   if (typeof window.ethers !== "undefined") return true;
@@ -269,7 +276,7 @@ function render() {
   const latest = snapshot.readings.at(-1);
   ui.pm25.textContent = latest ? latest.pm25_ug_m3.toFixed(1) : "—";
   ui.noise.textContent = latest ? latest.noise_db.toFixed(1) : "—";
-  ui.total.textContent = snapshot.total.toLocaleString("zh-CN");
+  ui.total.textContent = rememberTotal(snapshot.total).toLocaleString("zh-CN");
   ui.status.textContent = snapshot.sampling_error ? "采样异常" : snapshot.sampling ? "● 自动采样中" : "Ⅱ 自动采样已暂停";
   ui.toggle.textContent = snapshot.sampling ? "暂停采样" : "继续采样";
   ui.records.replaceChildren();
