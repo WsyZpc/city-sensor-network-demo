@@ -17,6 +17,10 @@ function initApp() {
   let lastAutoSealAt = Date.now();
   let actionError = "";
   const totalStorageKey = "city-sensor-network:max-total";
+  const anchorsStorageKey = "city-sensor-network:anchors";
+  const savedAnchors = () => {
+    try { return JSON.parse(localStorage.getItem(anchorsStorageKey) || "{}"); } catch { return {}; }
+  };
   const storedTotal = () => Number.parseInt(localStorage.getItem(totalStorageKey) || "0", 10) || 0;
   const rememberTotal = total => {
     const remembered = Math.max(storedTotal(), Number(total) || 0);
@@ -109,7 +113,9 @@ function renderBatches() {
     ui.batches.append(row);
     return;
   }
-  for (const batch of batchList) {
+  const anchors = savedAnchors();
+  for (const originalBatch of batchList) {
+    const batch = anchors[originalBatch.sha256_hex] ? { ...originalBatch, ...anchors[originalBatch.sha256_hex] } : originalBatch;
     const row = document.createElement("tr");
     for (const value of [`#${String(batch.batch_seq).padStart(6, "0")}`, time(batch.sealed_at), batch.reading_count]) {
       const cell = document.createElement("td");
@@ -203,9 +209,15 @@ async function anchorBatch(batch) {
     await request(`/api/batches/${batch.batch_seq}/anchor`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tx_hash: tx.hash }),
+      body: JSON.stringify({ tx_hash: tx.hash, sha256_hex: batch.sha256_hex, file_name: batch.file_name }),
     });
+    const anchors = savedAnchors();
+    anchors[batch.sha256_hex] = { anchor_tx: tx.hash.replace(/^0x/, ""), anchor_verified: true, file_name: batch.file_name };
+    localStorage.setItem(anchorsStorageKey, JSON.stringify(anchors));
+    batch.anchor_tx = tx.hash.replace(/^0x/, "");
+    batch.anchor_verified = true;
     ui.error.hidden = true;
+    renderBatches();
     await refresh();
   } catch (error) {
     ui.error.hidden = false;
@@ -313,7 +325,8 @@ async function refresh() {
     diagnostic(`请求成功: total=${data.total}, batches=${batchData.batches.length}`);
     snapshot = data;
     if (data.sampling_mode === "browser") snapshot.sampling = browserSampling;
-    batchList = batchData.batches;
+    const anchors = savedAnchors();
+    batchList = batchData.batches.map(batch => anchors[batch.sha256_hex] ? { ...batch, ...anchors[batch.sha256_hex] } : batch);
     render();
     renderBatches();
     ui.error.hidden = !(data.sampling_error || actionError);

@@ -17,6 +17,11 @@ const ui = {
 let chainConfig = null;
 let chainAbi = null;
 let provider = null;
+const anchorsStorageKey = 'city-sensor-network:anchors';
+
+function savedAnchor(hash) {
+    try { return JSON.parse(localStorage.getItem(anchorsStorageKey) || '{}')[hash] || null; } catch { return null; }
+}
 
 async function init() {
     try {
@@ -71,13 +76,24 @@ async function verifyFile() {
         ui.verifyResult.hidden = false;
 
         const metadataResponse = await fetch(`/api/hash/${hash}`, { cache: 'no-store' });
-        if (!metadataResponse.ok) {
+        const localAnchor = savedAnchor(hash);
+        if (!metadataResponse.ok && !localAnchor) {
             ui.chainStatus.textContent = '当前实例没有这份文件的链上记录';
             ui.verifyStatus.textContent = '✓ 文件格式和 SHA-256 完整性验证通过；暂未找到链上存证';
             ui.verifyStatus.className = 'verify-ok';
             return;
         }
-        const batch = await metadataResponse.json();
+        const batch = metadataResponse.ok ? await metadataResponse.json() : {
+            sha256_hex: hash,
+            file_name: localAnchor.file_name,
+            anchor_tx: localAnchor.anchor_tx,
+            anchor_verified: true,
+        };
+        if (localAnchor?.anchor_verified && !batch.anchor_verified) {
+            batch.anchor_tx = localAnchor.anchor_tx;
+            batch.file_name = localAnchor.file_name;
+            batch.anchor_verified = true;
+        }
         if (!batch.anchor_verified || !batch.anchor_tx) {
             ui.chainStatus.textContent = '文件指纹已登记，等待链上存证';
             ui.verifyStatus.textContent = '✓ 文件格式和 SHA-256 完整性验证通过；尚无已核实链上交易';

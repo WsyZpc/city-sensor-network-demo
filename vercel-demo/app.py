@@ -319,21 +319,40 @@ def find_by_hash(sha256_hex: str):
 
 class AnchorRequest(BaseModel):
     tx_hash: str
+    sha256_hex: str | None = None
+    file_name: str | None = None
 
 
 @app.post("/api/batches/{batch_seq}/anchor", status_code=200)
 def anchor_batch(batch_seq: int, req: AnchorRequest):
     batch = batches.get(batch_seq)
-    if batch is None:
+    if batch is None and os.environ.get("VERCEL") != "1":
+        raise HTTPException(status_code=404, detail="批次不存在。")
+    verification_batch = batch
+    if os.environ.get("VERCEL") == "1" and req.sha256_hex and req.file_name:
+        normalized_hash = req.sha256_hex.lower().removeprefix("0x")
+        if re.fullmatch(r"[0-9a-f]{64}", normalized_hash):
+            verification_batch = {
+                **(batch or {}),
+                "batch_seq": batch_seq,
+                "sha256_hex": normalized_hash,
+                "file_name": req.file_name,
+            }
+    if verification_batch is None:
         raise HTTPException(status_code=404, detail="批次不存在。")
     try:
-        proof = chain.verify_record_data_tx(req.tx_hash, batch)
+        proof = chain.verify_record_data_tx(req.tx_hash, verification_batch)
     except ChainError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    result = batches.save_anchor_tx(batch_seq, req.tx_hash, proof)
-    if result is None:
-        raise HTTPException(status_code=409, detail="存证记录已确认，或交易与该批次不匹配。")
-    return {**result, "anchor_proof": proof, "anchor_verified": True}
+    if batch and batch["sha256_hex"] == verification_batch["sha256_hex"] and batch["file_name"] == verification_batch["file_name"]:
+        result = batches.save_anchor_tx(batch_seq, req.tx_hash, proof)
+        if result is not None:
+            return {**result, "anchor_proof": proof, "anchor_verified": True}
+    if os.environ.get("VERCEL") == "1":
+        # The chain proof is authoritative even when this request reached a different
+        # short-lived instance whose SQLite database has another copy of the batch.
+        return {**verification_batch, "anchor_tx": req.tx_hash.lower(), "anchor_proof": proof, "anchor_verified": True}
+    raise HTTPException(status_code=409, detail="存证记录已确认，或交易与批次不匹配。")
 
 
 if __name__ == "__main__":
