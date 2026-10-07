@@ -10,6 +10,10 @@ window.SensorWallet = (() => {
     connecting = true;
     try {
       const chainId = config.chain_id_hex;
+      // Request account access from the click itself so MetaMask opens its
+      // authorization prompt before a potentially slow network switch.
+      const initialAccounts = await selected.request({ method: "eth_requestAccounts" });
+      if (!initialAccounts?.length) throw new Error("MetaMask 未返回账户，请在钱包中授权此网站。");
       if ((await selected.request({ method: "eth_chainId" })).toLowerCase() !== chainId.toLowerCase()) {
         try {
           await selected.request({ method: "wallet_switchEthereumChain", params: [{ chainId }] });

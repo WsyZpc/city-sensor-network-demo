@@ -1,7 +1,7 @@
 "use strict";
 
 function initApp() {
-  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "anchor-stage", "toast"].map(id => [id, document.getElementById(id)]));
+  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "chain-status", "anchor-stage", "toast"].map(id => [id, document.getElementById(id)]));
   const diagnostic = msg => {
     if (ui.diagnostic) ui.diagnostic.textContent = msg;
   };
@@ -9,17 +9,19 @@ function initApp() {
   let batchList = [];
   let chainConfig = null;
   let chainAbi = null;
+  let chainReady = null;
   let ethersLoading = null;
   let accessState = null;
   let accessLastChecked = 0;
   let browserSampling = true;
-  let lastAutoSampleAt = 0;
   let lastAutoSealAt = Date.now();
+  let lastRefreshAt = 0;
   let actionError = "";
   const totalStorageKey = "city-sensor-network:max-total";
   const batchesStorageKey = "city-sensor-network:batches";
   const anchorsStorageKey = "city-sensor-network:anchors";
   const batchFilesStorageKey = "city-sensor-network:batch-json";
+  const localReadingsStorageKey = "city-sensor-network:browser-readings";
   let toastTimer;
   const storageRead = (key, fallback = "") => {
     try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
@@ -45,22 +47,61 @@ function initApp() {
     } catch { return fallback; }
   };
   const savedAnchors = () => parseObject(storageRead(anchorsStorageKey, "{}"), {});
-  const storedTotal = () => Number.parseInt(storageRead(totalStorageKey, "0"), 10) || 0;
+  let sessionTotal = Number.parseInt(storageRead(totalStorageKey, "0"), 10) || 0;
+  const storedTotal = () => sessionTotal;
   const rememberTotal = total => {
-    const remembered = Math.max(storedTotal(), Number(total) || 0);
-    storageWrite(totalStorageKey, String(remembered));
-    return remembered;
+    sessionTotal = Math.max(sessionTotal, Number(total) || 0);
+    storageWrite(totalStorageKey, String(sessionTotal));
+    return sessionTotal;
   };
   const countLocalSample = () => {
-    const next = storedTotal() + 1;
-    storageWrite(totalStorageKey, String(next));
-    if (snapshot) snapshot.total = Math.max(Number(snapshot.total) || 0, next);
+    sessionTotal += 1;
+    storageWrite(totalStorageKey, String(sessionTotal));
+    if (snapshot) snapshot.total = Math.max(Number(snapshot.total) || 0, sessionTotal);
+    return sessionTotal;
   };
   const savedBatches = () => {
     try {
       const value = JSON.parse(storageRead(batchesStorageKey, "[]"));
       return Array.isArray(value) ? value : [];
     } catch { return []; }
+  };
+  const savedLocalReadings = () => {
+    try {
+      const value = JSON.parse(storageRead(localReadingsStorageKey, "[]"));
+      return Array.isArray(value) ? value.filter(row => row && Number.isFinite(Date.parse(row.recorded_at))
+        && typeof row.pm25_ug_m3 === "number" && Number.isFinite(row.pm25_ug_m3)
+        && typeof row.noise_db === "number" && Number.isFinite(row.noise_db))
+        .slice(-60) : [];
+    } catch { return []; }
+  };
+  let localReadings = savedLocalReadings();
+  sessionTotal = Math.max(sessionTotal, ...localReadings.map(row => Number(row.display_sequence) || 0));
+  const mergeReadings = serverReadings => {
+    const byReading = new Map();
+    for (const row of [...serverReadings, ...localReadings]) {
+      if (!row || !row.recorded_at) continue;
+      const key = `${row.recorded_at}:${row.pm25_ug_m3}:${row.noise_db}`;
+      byReading.set(key, { ...byReading.get(key), ...row });
+    }
+    return [...byReading.values()].sort((a, b) => Date.parse(a.recorded_at) - Date.parse(b.recorded_at)).slice(-60);
+  };
+  const applyBrowserSample = reading => {
+    if (!reading || !Number.isFinite(Date.parse(reading.recorded_at))
+        || typeof reading.pm25_ug_m3 !== "number" || typeof reading.noise_db !== "number") {
+      throw new Error("采样接口返回的数据无效，请稍后重试。");
+    }
+    const displaySequence = countLocalSample();
+    localReadings = mergeReadings([]).concat({ ...reading, display_sequence: displaySequence }).slice(-60);
+    storageWrite(localReadingsStorageKey, JSON.stringify(localReadings));
+    if (snapshot?.sampling_mode === "browser") {
+      snapshot.readings = mergeReadings(snapshot.readings);
+      snapshot.total = Math.max(Number(snapshot.total) || 0, displaySequence);
+      actionError = "";
+      render();
+      ui.error.textContent = snapshot.access_warning || "";
+      ui.error.hidden = !snapshot.access_warning;
+    }
   };
   const savedBatchFiles = () => parseObject(storageRead(batchFilesStorageKey, "{}"), {});
   const rememberBatchFile = (hash, contents) => {
@@ -92,6 +133,9 @@ async function loadEthers() {
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.head.appendChild(script);
+  }).then(loaded => {
+    if (!loaded) ethersLoading = null;
+    return loaded;
   });
   return ethersLoading;
 }
@@ -227,6 +271,13 @@ function renderBatches() {
     row.append(fileCell);
     ui.batches.append(row);
   }
+  const verifiedBatches = batchList.filter(batch => batch.anchor_verified).length;
+  if (ui["anchor-stage"]) {
+    ui["anchor-stage"].textContent = verifiedBatches
+      ? `${verifiedBatches} 个批次的交易已通过后端核验`
+      : "已生成批次；完成 MetaMask 交易后才会显示存证通过";
+  }
+}
 
   async function downloadBatchJson(batch, cachedContents = "") {
     try {
@@ -314,42 +365,41 @@ function renderBatches() {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     showToast("测试 JSON 已下载，可用于验证页面试跑；它没有对应的链上存证。", false);
   }
-  const verifiedBatches = batchList.filter(batch => batch.anchor_verified).length;
-  if (ui["anchor-stage"]) {
-    ui["anchor-stage"].textContent = verifiedBatches
-      ? `${verifiedBatches} 个批次的交易已通过后端核验`
-      : "已生成批次；完成 MetaMask 交易后才会显示存证通过";
-  }
-}
-
 async function initChain() {
-  try {
+  if (chainConfig && chainAbi) return { config: chainConfig, abi: chainAbi };
+  if (chainReady) return chainReady;
+  chainReady = (async () => {
     const [abiRes, cfgRes] = await Promise.all([
-      fetch("/static/abi.json", { cache: "no-store" }),
-      fetch("/static/chain-config.json", { cache: "no-store" }),
+      fetch("/static/abi.json", { cache: "no-store", signal: AbortSignal.timeout(8000) }),
+      fetch("/static/chain-config.json", { cache: "no-store", signal: AbortSignal.timeout(8000) }),
     ]);
-    chainAbi = await abiRes.json();
-    chainConfig = await cfgRes.json();
-  } catch (error) {
-    console.warn("链配置加载失败:", error);
-  }
+    if (!abiRes.ok || !cfgRes.ok) throw new Error(`配置接口返回 ${!cfgRes.ok ? cfgRes.status : abiRes.status}`);
+    const [abi, config] = await Promise.all([abiRes.json(), cfgRes.json()]);
+    if (!Array.isArray(abi) || Number(config.chain_id_decimal) !== 677
+        || !/^0x[0-9a-fA-F]{40}$/.test(config.contract_address || "")) {
+      throw new Error("主网配置内容无效");
+    }
+    chainAbi = abi;
+    chainConfig = config;
+    if (ui["chain-status"]) ui["chain-status"].textContent = `BOT Chain 主网配置已读取 · Chain ID ${config.chain_id_decimal}`;
+    return { config, abi };
+  })().catch(error => {
+    chainReady = null;
+    if (ui["chain-status"]) ui["chain-status"].textContent = "主网配置暂不可用，点击钱包按钮时会重试";
+    diagnostic(`BOT Chain 配置加载失败：${error.message}`);
+    throw error;
+  });
+  return chainReady;
 }
 
 async function anchorBatch(batch) {
-  if (!chainConfig || !chainAbi) {
-    alert("链配置未加载，请刷新页面重试。");
-    return;
-  }
   if (typeof window.ethereum === "undefined") {
-    alert("请安装 MetaMask 浏览器钱包插件。");
-    return;
-  }
-  const ethersLoaded = await loadEthers();
-  if (!ethersLoaded) {
-    alert("区块链库加载失败，请检查网络连接后重试。");
+    alert("当前浏览器未检测到 MetaMask，请在安装了 MetaMask 的 Chrome 或 Edge 中打开在线 Demo。");
     return;
   }
   try {
+    await initChain();
+    if (!(await loadEthers())) throw new Error("区块链库加载失败，请检查网络后重试。");
     const { provider: web3Provider, signer } = await SensorWallet.connect(chainConfig);
     const owner = await new ethers.Contract(chainConfig.contract_address, chainAbi, web3Provider).owner();
     const submitter = await signer.getAddress();
@@ -383,7 +433,10 @@ async function anchorBatch(batch) {
 }
 
 async function signInWithWallet() {
-  if (!chainConfig || !(await loadEthers())) throw new Error("区块链配置尚未就绪，请稍后重试。");
+  if (!window.ethereum) throw new Error("当前浏览器未检测到 MetaMask。请在安装了 MetaMask 的 Chrome 或 Edge 中打开在线 Demo。");
+  await initChain();
+  if (!(await loadEthers())) throw new Error("区块链库加载失败，请检查网络后重试。");
+  if (!window.SensorWallet) throw new Error("钱包连接脚本未加载，请刷新页面后重试。");
   const { signer, address } = await SensorWallet.connect(chainConfig);
   const challenge = await request(`/api/auth/challenge?address=${encodeURIComponent(address)}`);
   const signature = await signer.signMessage(challenge.message);
@@ -465,7 +518,7 @@ function render() {
   ui.records.replaceChildren();
   for (const reading of snapshot.readings.slice(-8).reverse()) {
     const row = document.createElement("tr");
-    for (const value of [`#${String(reading.sequence).padStart(4, "0")}`, time(reading.recorded_at), reading.pm25_ug_m3.toFixed(1), reading.noise_db.toFixed(1)]) {
+    for (const value of [`#${String(reading.display_sequence ?? reading.sequence).padStart(4, "0")}`, time(reading.recorded_at), reading.pm25_ug_m3.toFixed(1), reading.noise_db.toFixed(1)]) {
       const cell = document.createElement("td");
       cell.textContent = value;
       row.append(cell);
@@ -496,14 +549,19 @@ async function refresh() {
     if (version !== refreshVersion) return;
     diagnostic(`请求成功: total=${data.total}, batches=${batchData.batches.length}`);
     snapshot = data;
-    if (data.sampling_mode === "browser") snapshot.sampling = browserSampling;
+    if (data.sampling_mode === "browser") {
+      snapshot.sampling = browserSampling;
+      snapshot.readings = mergeReadings(data.readings);
+      snapshot.total = Math.max(Number(data.total) || 0, storedTotal());
+    }
+    lastRefreshAt = Date.now();
     const anchors = savedAnchors();
     const currentBatches = rememberBatches(batchData.batches);
     batchList = currentBatches.map(batch => anchors[batch.sha256_hex] ? { ...batch, ...anchors[batch.sha256_hex] } : batch);
     render();
     renderBatches();
-    ui.error.hidden = !(data.sampling_error || actionError);
-    ui.error.textContent = actionError || (data.sampling_error ? "自动采样失败，页面显示的是已有记录。请稍后重试。" : "");
+    ui.error.hidden = !(data.sampling_error || actionError || data.access_warning);
+    ui.error.textContent = actionError || data.access_warning || (data.sampling_error ? "自动采样失败，页面显示的是已有记录。请稍后重试。" : "");
     ui.toggle.disabled = actionBusy;
     ui.toggle.textContent = snapshot.sampling_mode === "browser"
       ? (browserSampling ? "暂停采样" : "继续采样")
@@ -512,7 +570,7 @@ async function refresh() {
     ui.sample.innerHTML = "<span>＋</span> 采样一次";
     ui.seal.disabled = actionBusy;
     ui.seal.textContent = "立即打包批次";
-    await refreshAccess();
+    void refreshAccess();
   } catch (error) {
     if (version !== refreshVersion) return;
     diagnostic(`请求失败: ${error.message || error}`);
@@ -531,25 +589,27 @@ async function refresh() {
 }
 
 async function poll() {
-  if (snapshot?.sampling_mode === "browser" && browserSampling && !actionBusy
-      && Date.now() - lastAutoSampleAt >= Math.max(1000, snapshot.interval_seconds * 1000)) {
-    actionBusy = true;
-    lastAutoSampleAt = Date.now();
-    try {
-      await request("/api/sample", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      countLocalSample();
+  const started = Date.now();
+  try {
+    if (!snapshot || Date.now() - lastRefreshAt >= 10000) await refresh();
+    if (snapshot?.sampling_mode === "browser" && browserSampling && !document.hidden && !actionBusy) {
+      const reading = await request("/api/sample", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      applyBrowserSample(reading);
       if (Date.now() - lastAutoSealAt >= 60000) {
-        await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
         lastAutoSealAt = Date.now();
+        try { await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); }
+        catch (error) { actionError = `批次自动打包未完成：${error.message}`; }
+        await refresh();
       }
-    } catch (error) {
-      actionError = `自动采样未完成：${error.message}`;
-    } finally {
-      actionBusy = false;
     }
+  } catch (error) {
+    actionError = `自动采样未完成：${error.message}`;
+    ui.error.textContent = actionError;
+    ui.error.hidden = false;
+    diagnostic(actionError);
+  } finally {
+    pollTimer = setTimeout(poll, Math.max(0, 1000 - (Date.now() - started)));
   }
-  await refresh();
-  pollTimer = setTimeout(poll, 1000);
 }
 
 async function action(path, body) {
@@ -560,8 +620,8 @@ async function action(path, body) {
   ui.sample.disabled = true;
   ui.seal.disabled = true;
   try {
-    await request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (path === "/api/sample") countLocalSample();
+    const result = await request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (path === "/api/sample") applyBrowserSample(result);
     actionBusy = false;
     await refresh();
   } catch (error) {
@@ -583,7 +643,6 @@ ui.toggle.addEventListener("click", () => {
     browserSampling = !browserSampling;
     snapshot.sampling = browserSampling;
     actionError = "";
-    lastAutoSampleAt = 0;
     render();
   } else if (snapshot) {
     action("/api/simulator", { running: !snapshot.sampling });
@@ -599,7 +658,7 @@ ui["wallet-logout"]?.addEventListener("click", async () => {
     await request("/api/auth/logout", { method: "POST" });
     if (ui["wallet-login"]) {
       ui["wallet-login"].hidden = false;
-      ui["wallet-login"].textContent = "连接钱包以下载";
+      ui["wallet-login"].textContent = "连接 MetaMask";
       ui["wallet-logout"].hidden = true;
     }
     accessState = null;
@@ -622,7 +681,7 @@ document.querySelectorAll("[data-metric]").forEach(button => button.addEventList
 if (window.ResizeObserver) new ResizeObserver(drawChart).observe(ui.chart);
 else window.addEventListener("resize", drawChart);
 poll();
-initChain();
+void initChain().catch(error => console.warn("BOT Chain 配置加载失败:", error));
 refreshAccess();
 }
 

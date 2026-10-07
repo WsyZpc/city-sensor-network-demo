@@ -20,6 +20,7 @@ const ui = {
 };
 
 let provider, signer, contract, config;
+let configPromise = null;
 const MAX_SUBSCRIPTION_INDEX = 8192;
 
 function isMissingSubscriptionIndex(error) {
@@ -59,12 +60,21 @@ async function findLastSubscription(address) {
     return null;
 }
 
-async function loadConfig() {
-    const [abiRes, cfgRes] = await Promise.all([
-        fetch('/static/abi.json', { cache: 'no-store' }),
-        fetch('/static/chain-config.json', { cache: 'no-store' }),
-    ]);
-    return { abi: await abiRes.json(), config: await cfgRes.json() };
+function loadConfig() {
+    if (configPromise) return configPromise;
+    configPromise = (async () => {
+        const [abiRes, cfgRes] = await Promise.all([
+            fetch('/static/abi.json', { cache: 'no-store', signal: AbortSignal.timeout(8000) }),
+            fetch('/static/chain-config.json', { cache: 'no-store', signal: AbortSignal.timeout(8000) }),
+        ]);
+        if (!abiRes.ok || !cfgRes.ok) throw new Error('链配置暂时不可用，请稍后重试。');
+        const [abi, loadedConfig] = await Promise.all([abiRes.json(), cfgRes.json()]);
+        if (!Array.isArray(abi) || Number(loadedConfig.chain_id_decimal) !== 677) {
+            throw new Error('BOT Chain 主网配置无效。');
+        }
+        return { abi, config: loadedConfig };
+    })().catch(error => { configPromise = null; throw error; });
+    return configPromise;
 }
 
 async function init() {
@@ -95,13 +105,15 @@ function updateTotalPrice() {
 
 async function connectWallet() {
     ui.connect.disabled = true;
+    ui.connect.textContent = '等待 MetaMask…';
     try {
-        if (!config) throw new Error('网络配置正在加载，请稍后重试。');
+        if (!window.ethereum) throw new Error('当前浏览器未检测到 MetaMask，请在安装了 MetaMask 的 Chrome 或 Edge 中打开。');
+        const loaded = await loadConfig();
+        config = loaded.config;
         const connected = await SensorWallet.connect(config);
         provider = connected.provider;
         signer = connected.signer;
-        const abi = await (await fetch('/static/abi.json', { cache: 'no-store' })).json();
-        contract = new ethers.Contract(config.contract_address, abi, signer);
+        contract = new ethers.Contract(config.contract_address, loaded.abi, signer);
         const address = await signer.getAddress();
         const challengeResponse = await fetch(`/api/auth/challenge?address=${encodeURIComponent(address)}`, { credentials: 'same-origin' });
         if (!challengeResponse.ok) throw new Error((await challengeResponse.json()).detail || '获取登录签名失败。');
@@ -123,6 +135,7 @@ async function connectWallet() {
     } catch (error) {
         console.error('连接钱包失败:', error);
         ui.connect.disabled = false;
+        ui.connect.textContent = '连接钱包';
         alert('连接钱包失败: ' + (error.message || '未知错误'));
     }
 }

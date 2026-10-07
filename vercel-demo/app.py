@@ -232,11 +232,15 @@ def access_status(request: Request):
 def readings(request: Request, limit: int = Query(default=3, ge=1, le=500)):
     address = session_address(request)
     preview_only = address is None
+    access_warning = None
     if not preview_only:
         try:
             allowed = chain.owner().lower() == address.lower() or chain.subscription(address, int(CHAIN_CONFIG["stream_id"]))["valid"]
-        except ChainError as error:
-            raise HTTPException(status_code=503, detail=str(error)) from error
+        except ChainError:
+            # A transient RPC failure must not stop the public dashboard or
+            # browser-triggered sampling. Keep the private preview limit.
+            allowed = False
+            access_warning = "链上权限暂不可查，当前只显示公开预览。"
         if not allowed:
             preview_only = True
     if preview_only:
@@ -251,6 +255,7 @@ def readings(request: Request, limit: int = Query(default=3, ge=1, le=500)):
         "sampling_mode": "browser" if os.environ.get("VERCEL") == "1" else "server",
         "anchored": False,
         "preview_only": preview_only,
+        "access_warning": access_warning,
     }
 
 

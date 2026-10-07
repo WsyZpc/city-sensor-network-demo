@@ -1,0 +1,129 @@
+// Run with: node tests/frontend_smoke.cjs
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const staticDir = path.join(__dirname, '..', 'templates', 'static');
+
+async function walletPromptStartsWithAccountRequest() {
+  const methods = [];
+  const account = '0x' + '1'.repeat(40);
+  const selected = {
+    isMetaMask: true,
+    async request({ method }) {
+      methods.push(method);
+      if (method === 'eth_requestAccounts') return [account];
+      if (method === 'eth_chainId') return '0x2a5';
+      throw new Error(`Unexpected wallet method: ${method}`);
+    },
+    on() {},
+  };
+  const window = { ethereum: selected, addEventListener() {}, dispatchEvent() {} };
+  const ethers = {
+    providers: { Web3Provider: class {
+      getSigner(address) { return { address }; }
+    } },
+    utils: { getAddress: address => address },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(staticDir, 'wallet.js'), 'utf8'), { window, ethers, Event });
+  const result = await window.SensorWallet.connect({ chain_id_hex: '0x2a5' });
+  assert.equal(result.address, account);
+  assert.equal(methods[0], 'eth_requestAccounts');
+}
+
+async function browserSamplingSurvivesOldServerSnapshots() {
+  const elements = new Map();
+  class Element {
+    constructor(id) {
+      this.id = id;
+      this.textContent = '';
+      this.hidden = false;
+      this.disabled = false;
+      this.clientWidth = 640;
+      this.clientHeight = 260;
+      this.children = [];
+      this.listeners = {};
+      this.classList = { add() {}, remove() {}, toggle() {} };
+    }
+    replaceChildren() { this.children = []; }
+    append(...children) { this.children.push(...children); }
+    setAttribute() {}
+    addEventListener(type, handler) { this.listeners[type] = handler; }
+  }
+  const document = {
+    readyState: 'complete',
+    hidden: false,
+    getElementById(id) {
+      if (!elements.has(id)) elements.set(id, new Element(id));
+      return elements.get(id);
+    },
+    createElement: tag => new Element(tag),
+    querySelectorAll: () => [],
+    addEventListener() {},
+  };
+  const saved = new Map();
+  const localStorage = {
+    getItem: key => saved.get(key) ?? null,
+    setItem: (key, value) => saved.set(key, value),
+  };
+  const base = Date.parse('2026-10-08T00:00:00Z');
+  const reading = (sequence, offset) => ({
+    node_id: 'wuhan-demo-001', sequence,
+    recorded_at: new Date(base + offset * 1000).toISOString(),
+    pm25_ug_m3: 26 + offset, noise_db: 53 + offset, source: 'simulated',
+  });
+  let sampleCount = 0;
+  let walletConnected = false;
+  const fetch = async (url, options = {}) => {
+    let body;
+    if (url.startsWith('/api/readings')) {
+      body = { total: 12, readings: [reading(10, 0), reading(11, 1), reading(12, 2)],
+        sampling_mode: 'browser', interval_seconds: 1, sampling_error: false };
+    } else if (url === '/api/sample' && options.method === 'POST') {
+      sampleCount += 1;
+      body = reading(13, 3 + sampleCount);
+    } else if (url.startsWith('/api/batches')) body = { batches: [] };
+    else if (url === '/api/access') body = { authenticated: walletConnected, can_download: false };
+    else if (url.startsWith('/api/auth/challenge')) body = { message: 'Demo sign-in challenge' };
+    else if (url === '/api/auth/verify') body = { authenticated: true };
+    else if (url === '/static/abi.json') body = [];
+    else if (url === '/static/chain-config.json') {
+      body = { chain_id_decimal: 677, contract_address: '0x' + '1'.repeat(40) };
+    } else throw new Error(`Unexpected request: ${url}`);
+    return { ok: true, json: async () => body };
+  };
+  const window = { addEventListener() {}, ResizeObserver: null };
+  const context = { document, window, localStorage, fetch, AbortSignal, console,
+    setTimeout, clearTimeout, Date, Map, Set, TextEncoder, TextDecoder };
+  vm.runInNewContext(fs.readFileSync(path.join(staticDir, 'app.js'), 'utf8'), context);
+  await new Promise(resolve => setTimeout(resolve, 1250));
+  assert.ok(sampleCount >= 2, `Expected repeat sampling, got ${sampleCount}`);
+  assert.ok(Number(elements.get('total').textContent) >= 14, 'Displayed total must advance');
+  assert.ok(elements.get('records').children.length > 3, 'New samples must remain visible after old snapshots');
+  assert.ok(JSON.parse(saved.get('city-sensor-network:browser-readings')).length >= 2);
+  assert.match(elements.get('chain-status').textContent, /配置已读取/);
+  assert.equal(typeof elements.get('sample-json').listeners.click, 'function');
+  assert.equal(elements.get('sample').disabled, false);
+  await elements.get('wallet-login').listeners.click();
+  assert.match(elements.get('error').textContent, /未检测到 MetaMask/);
+  window.ethereum = {};
+  window.ethers = {};
+  const SensorWallet = { async connect(config) {
+    assert.equal(config.chain_id_decimal, 677);
+    walletConnected = true;
+    return { address: '0x' + '1'.repeat(40), signer: { signMessage: async () => '0xsignature' } };
+  } };
+  window.SensorWallet = SensorWallet;
+  context.SensorWallet = SensorWallet;
+  await elements.get('wallet-login').listeners.click();
+  assert.equal(walletConnected, true, 'Homepage wallet button must call the provider');
+  assert.equal(elements.get('wallet-logout').hidden, false);
+}
+
+(async () => {
+  await walletPromptStartsWithAccountRequest();
+  await browserSamplingSurvivesOldServerSnapshots();
+  process.stdout.write('Frontend wallet and sampling smoke checks passed.\n');
+  process.exit(0);
+})().catch(error => { console.error(error); process.exit(1); });

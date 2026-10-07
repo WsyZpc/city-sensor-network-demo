@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>城市传感器网络 · 节点控制台</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/wallet.js" defer></script>
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=20261008-1">
+  <script src="/static/wallet.js?v=20261008-1" defer></script>
+  <script src="/static/app.js?v=20261008-1" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -23,15 +23,15 @@
     <div class="topbar"><span>工作台 <span class="slash">/</span> 节点控制台</span><span class="local-badge"><i></i> 在线演示环境</span></div>
     <header class="page-header">
       <div><div class="eyebrow">OBSERVE · RECORD · VERIFY</div><h1>看见城市的每一次变化<span>。</span></h1><p>页面保持可见时自动生成模拟读数；可暂停、单次采样和打包。</p></div>
-      <div class="actions"><span id="access-status" class="tag">正在检查钱包权限…</span><button id="wallet-login" class="button secondary">连接钱包以下载</button><button id="wallet-logout" class="button secondary" hidden>退出</button><button id="toggle" class="button secondary">重试连接</button><button id="sample" class="button primary"><span>＋</span> 采样一次</button></div>
+      <div class="actions"><span id="access-status" class="tag">正在检查钱包权限…</span><button id="wallet-login" class="button secondary">连接 MetaMask</button><button id="wallet-logout" class="button secondary" hidden>退出</button><button id="toggle" class="button secondary">重试连接</button><button id="sample" class="button primary"><span>＋</span> 采样一次</button></div>
     </header>
     <div id="error" class="error" role="alert" hidden></div>
-    <section class="notice"><span class="notice-icon">i</span><div><strong>模拟数据演示</strong><span>读数由 Python 生成，不代表真实监测结果。已打包文件的上链状态见下方批次记录；哈希只能验证文件完整性。</span></div><span class="tag">SIMULATION</span></section>
+    <section class="notice"><span class="notice-icon">i</span><div><strong>模拟数据演示</strong><span>读数由 Python 生成，不代表真实监测结果。已打包文件的上链状态见下方批次记录；哈希只能验证文件完整性。<span id="chain-status">BOT Chain 主网配置加载中…</span></span></div><span class="tag">SIMULATION</span></section>
     <section class="node-strip"><div class="node-name"><span class="node-symbol">⌁</span><div><strong>武汉演示节点 <span class="subtle">01</span></strong><small>wuhan-demo-001</small></div></div><div class="node-detail"><span>采样间隔</span><strong>约每 1 秒</strong></div><div class="node-detail"><span>数据来源</span><strong>浏览器触发的模拟采样</strong></div><div class="status-pill" id="status">连接中</div></section>
     <section class="metrics" aria-label="最新监测读数">
       <article class="metric"><div class="metric-title">PM2.5 浓度 <span>01</span></div><div class="metric-value"><strong id="pm25">—</strong><span>μg/m³</span></div><div class="metric-foot"><i></i> 最新模拟读数</div></article>
       <article class="metric"><div class="metric-title">环境噪音 <span>02</span></div><div class="metric-value"><strong id="noise">—</strong><span>dB</span></div><div class="metric-foot"><i class="blue"></i> 最新模拟读数</div></article>
-      <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot">演示累计 · 实例切换可能重置</div></article>
+      <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot">当前浏览器累计 · 清除站点数据后重置</div></article>
     </section>
     <section class="chart-panel panel">
       <div class="panel-heading"><div><h2>环境数据趋势</h2><p>最近 60 条采样 · 横轴为本地时间</p></div><div class="chart-tabs" role="group" aria-label="选择图表指标"><button class="selected" data-metric="pm25_ug_m3" aria-pressed="true">PM2.5</button><button data-metric="noise_db" aria-pressed="false">噪音</button></div></div>

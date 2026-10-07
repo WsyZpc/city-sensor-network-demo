@@ -6,6 +6,7 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 import app as webapp
+from chain import ChainError
 
 
 OWNER = "0x" + "11" * 20
@@ -62,6 +63,31 @@ class BatchDownloadTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as error:
                 webapp.download_batch_by_hash(HASH, request)
         self.assertEqual(error.exception.status_code, 403)
+
+
+class ReadingsFallbackTests(unittest.TestCase):
+    def test_rpc_failure_keeps_public_sampling_available(self):
+        class OfflineChain:
+            def owner(self):
+                raise ChainError("RPC unavailable")
+
+        class PreviewStore:
+            def snapshot(self, limit):
+                self.limit = limit
+                return {"total": 12, "readings": []}
+
+        preview_store = PreviewStore()
+        with (
+            patch.object(webapp, "session_address", return_value=OWNER),
+            patch.object(webapp, "chain", OfflineChain()),
+            patch.object(webapp, "store", preview_store),
+            patch.object(webapp.app.state, "sampling", False, create=True),
+            patch.object(webapp.app.state, "sampling_error", False, create=True),
+        ):
+            result = webapp.readings(object(), limit=60)
+        self.assertEqual(preview_store.limit, 3)
+        self.assertTrue(result["preview_only"])
+        self.assertIn("公开预览", result["access_warning"])
 
 
 if __name__ == "__main__":

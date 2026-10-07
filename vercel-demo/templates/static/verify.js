@@ -18,24 +18,30 @@ const ui = {
 let chainConfig = null;
 let chainAbi = null;
 let provider = null;
+let initPromise = null;
 const anchorsStorageKey = 'city-sensor-network:anchors';
 
 function savedAnchor(hash) {
     try { return JSON.parse(localStorage.getItem(anchorsStorageKey) || '{}')[hash] || null; } catch { return null; }
 }
 
-async function init() {
-    try {
+function init() {
+    if (provider && chainConfig && chainAbi) return Promise.resolve();
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
         const [abiRes, cfgRes] = await Promise.all([
-            fetch('/static/abi.json', { cache: 'no-store' }),
-            fetch('/static/chain-config.json', { cache: 'no-store' }),
+            fetch('/static/abi.json', { cache: 'no-store', signal: AbortSignal.timeout(8000) }),
+            fetch('/static/chain-config.json', { cache: 'no-store', signal: AbortSignal.timeout(8000) }),
         ]);
+        if (!abiRes.ok || !cfgRes.ok) throw new Error('链配置接口暂不可用。');
         chainAbi = await abiRes.json();
         chainConfig = await cfgRes.json();
+        if (!Array.isArray(chainAbi) || Number(chainConfig.chain_id_decimal) !== 677) {
+            throw new Error('BOT Chain 主网配置无效。');
+        }
         provider = new ethers.providers.JsonRpcProvider(chainConfig.rpc_url);
-    } catch (error) {
-        console.error('初始化失败:', error);
-    }
+    })().catch(error => { initPromise = null; throw error; });
+    return initPromise;
 }
 
 async function sha256Hex(buffer) {
@@ -101,7 +107,7 @@ async function verifyFile() {
             ui.verifyStatus.className = 'verify-ok';
             return;
         }
-        if (!provider || !chainConfig) throw new Error('链配置未加载，请刷新页面重试。');
+        await init();
 
         const receipt = await provider.getTransactionReceipt(`0x${batch.anchor_tx}`);
         if (!receipt || receipt.status !== 1) throw new Error('存证交易暂时无法读取或未成功确认。');
@@ -143,4 +149,4 @@ ui.fileInput.addEventListener('change', () => {
     ui.verify.disabled = !file;
     ui.verify.textContent = file ? '验证文件' : '选择文件后验证';
 });
-init();
+void init().catch(error => console.warn('链配置暂未加载，验证时将重试:', error));
