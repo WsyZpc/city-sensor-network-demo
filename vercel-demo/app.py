@@ -260,6 +260,11 @@ def list_batches(limit: int = Query(default=10, ge=1, le=200)):
 @app.post("/api/batches/seal", status_code=201)
 def seal_batch_now():
     batch = batches.seal()
+    if batch is None and os.environ.get("VERCEL") == "1":
+        # A request may land on a fresh serverless instance that only has its seed batch.
+        # Create one reading so the button always has a meaningful online action.
+        store.capture()
+        batch = batches.seal()
     if batch is None:
         raise HTTPException(status_code=400, detail="没有未打包的新读数，无需创建批次。")
     return batch

@@ -366,6 +366,9 @@ async function action(path, body) {
     actionError = `操作未完成：${error.message}`;
     ui.error.textContent = actionError;
     ui.error.hidden = false;
+    ui.toggle.disabled = false;
+    ui.sample.disabled = false;
+    ui.seal.disabled = false;
   } finally {
     actionBusy = false;
   }
