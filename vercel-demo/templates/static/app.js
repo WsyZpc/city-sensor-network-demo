@@ -331,8 +331,8 @@ async function refresh() {
 }
 
 async function poll() {
-  if (snapshot?.sampling_mode === "browser" && browserSampling && !document.hidden && !actionBusy
-      && Date.now() - lastAutoSampleAt >= snapshot.interval_seconds * 1000) {
+  if (snapshot?.sampling_mode === "browser" && browserSampling && !actionBusy
+      && Date.now() - lastAutoSampleAt >= Math.max(1000, snapshot.interval_seconds * 1000)) {
     actionBusy = true;
     lastAutoSampleAt = Date.now();
     try {
@@ -348,7 +348,7 @@ async function poll() {
     }
   }
   await refresh();
-  pollTimer = setTimeout(poll, 2000);
+  pollTimer = setTimeout(poll, 1000);
 }
 
 async function action(path, body) {

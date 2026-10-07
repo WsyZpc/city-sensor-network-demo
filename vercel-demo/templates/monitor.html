@@ -17,7 +17,7 @@
     <a href="/subscribe" class="nav-item"><span>☑</span> 数据订阅</a>
     <a href="/verify" class="nav-item"><span> EDI</span> 文件验证</a>
     <div class="sidebar-note"><span class="note-line"></span><strong>从一条数据开始。</strong><p>记录环境变化，<br>让数据的来路可以被看见。</p></div>
-    <div class="stage"><span>当前阶段</span><strong>01 / 模拟采集</strong><p>模拟数据 · SQLite 存储</p></div>
+    <div class="stage"><span>当前阶段</span><strong>01 / 模拟采集</strong><p>在线版约每 1 秒更新</p></div>
   </aside>
   <main>
     <div class="topbar"><span>工作台 <span class="slash">/</span> 节点控制台</span><span class="local-badge"><i></i> 在线演示环境</span></div>
@@ -40,7 +40,7 @@
     </section>
     <section class="bottom-grid">
       <div class="panel records-panel"><div class="panel-heading"><div><h2>最近采样记录</h2><p>保留原始时间、序号与读数</p></div><span class="tiny-label">LATEST 8</span></div><div class="table-wrap"><table><thead><tr><th>序号</th><th>采样时间</th><th>PM2.5 <small>μg/m³</small></th><th>噪音 <small>dB</small></th><th>来源</th></tr></thead><tbody id="records"><tr><td colspan="5">正在连接云端服务…</td></tr></tbody></table></div></div>
-      <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>保持此页面可见时定时采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p>演示临时存储，实例重启后可能重置</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔测试网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>测试网订阅合约已连接，交易待演示</p></div></div></div>
+      <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>在线页面每秒请求一次采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p>演示临时存储，实例重启后可能重置</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔测试网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>测试网订阅合约已连接，交易待演示</p></div></div></div>
     </section>
     <section class="panel batches-panel">
       <div class="panel-heading"><div><h2>数据批次与存证指纹</h2><p>每分钟把读数打包为 JSON 文件并计算 SHA-256 指纹 · 点击"上链"把指纹提交到 BOT Chain</p></div><button id="seal" class="button secondary" disabled>立即打包批次</button></div>

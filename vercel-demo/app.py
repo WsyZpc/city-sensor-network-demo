@@ -24,7 +24,7 @@ from wallet_auth import WalletSessions
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = Path("/tmp/city-sensor-network-demo") if os.environ.get("VERCEL") == "1" else ROOT / "data"
 DATA_DIR = Path(os.environ.get("SENSOR_DATA_DIR", str(DEFAULT_DATA_DIR)))
-SAMPLING_INTERVAL_SECONDS = 2 if os.environ.get("VERCEL") == "1" else INTERVAL_SECONDS
+SAMPLING_INTERVAL_SECONDS = 1 if os.environ.get("VERCEL") == "1" else INTERVAL_SECONDS
 store = ReadingStore(DATA_DIR / "sensors.sqlite3")
 batches = BatchStore(DATA_DIR / "sensors.sqlite3", DATA_DIR / "batches")
 CHAIN_CONFIG = json.loads((ROOT / "templates" / "static" / "chain-config.json").read_text(encoding="utf-8"))
