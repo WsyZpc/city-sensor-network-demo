@@ -301,11 +301,13 @@ function renderBatches() {
     return;
   }
   const anchors = savedAnchors();
-  for (const originalBatch of [...batchList].sort((a, b) => Date.parse(b.sealed_at) - Date.parse(a.sealed_at))) {
+  for (const originalBatch of [...batchList].sort((a, b) =>
+    Number(Boolean(b.browser_generated)) - Number(Boolean(a.browser_generated))
+      || Date.parse(b.sealed_at) - Date.parse(a.sealed_at))) {
     const batch = anchors[originalBatch.sha256_hex] ? { ...originalBatch, ...anchors[originalBatch.sha256_hex] } : originalBatch;
     const cachedFile = savedBatchFiles()[batch.sha256_hex];
     const row = document.createElement("tr");
-    for (const value of [`#${String(batch.batch_seq).padStart(6, "0")}`, time(batch.sealed_at), batch.reading_count]) {
+    for (const value of [batch.browser_generated ? `本机 #${String(batch.batch_seq).slice(-6)}` : `#${String(batch.batch_seq).padStart(6, "0")}`, time(batch.sealed_at), batch.reading_count]) {
       const cell = document.createElement("td");
       cell.textContent = value;
       row.append(cell);
