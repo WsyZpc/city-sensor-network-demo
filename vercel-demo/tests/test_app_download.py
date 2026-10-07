@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import base64
+import hashlib
 from pathlib import Path
 from unittest.mock import patch
 
@@ -40,6 +42,47 @@ class FakeBatches:
 
 
 class BatchDownloadTests(unittest.TestCase):
+    def test_authorized_batch_listing_includes_verified_original_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sensor-batch-test.json"
+            data = b'{"readings":[]}'
+            path.write_bytes(data)
+            fingerprint = hashlib.sha256(data).hexdigest()
+
+            class RecentBatches:
+                def list_recent(self, limit):
+                    return [{"sha256_hex": fingerprint, "file_name": path.name}]
+
+                def file_path(self, batch):
+                    return path
+
+            with (
+                patch.object(webapp, "session_address", return_value=OWNER),
+                patch.object(webapp, "chain", FakeChain()),
+                patch.object(webapp, "batches", RecentBatches()),
+            ):
+                result = webapp.list_batches(object(), limit=10, include_files=True)
+            self.assertEqual(base64.b64decode(result["batch_files"][fingerprint]), data)
+
+    def test_unauthorized_batch_listing_never_includes_file(self):
+        class RecentBatches:
+            def list_recent(self, limit):
+                return [{"sha256_hex": HASH, "file_name": "batch.json"}]
+
+        with (
+            patch.object(webapp, "session_address", return_value=None),
+            patch.object(webapp, "batches", RecentBatches()),
+        ):
+            result = webapp.list_batches(object(), limit=10, include_files=True)
+        self.assertNotIn("batch_files", result)
+
+    def test_corrupt_original_is_not_exported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "batch.json"
+            path.write_bytes(b'{}')
+            with patch.object(webapp, "batches", FakeBatches(path)):
+                self.assertIsNone(webapp.batch_file_base64({"file_name": path.name, "sha256_hex": HASH}))
+
     def test_download_by_hash_requires_access_and_returns_exact_file(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sensor-batch-test.json"

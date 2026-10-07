@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createHash, webcrypto } = require('node:crypto');
 
 const staticDir = path.join(__dirname, '..', 'templates', 'static');
 
@@ -75,6 +76,9 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   });
   let sampleCount = 0;
   let walletConnected = false;
+  const batchJson = '{"readings":[]}';
+  const batchHash = createHash('sha256').update(batchJson).digest('hex');
+  const demoBatch = { batch_seq: 1, file_name: 'batch-000001.json', sha256_hex: batchHash };
   const fetch = async (url, options = {}) => {
     let body;
     if (url.startsWith('/api/readings')) {
@@ -83,8 +87,11 @@ async function browserSamplingSurvivesOldServerSnapshots() {
     } else if (url === '/api/sample' && options.method === 'POST') {
       sampleCount += 1;
       body = reading(13, 3 + sampleCount);
-    } else if (url.startsWith('/api/batches')) body = { batches: [] };
-    else if (url === '/api/access') body = { authenticated: walletConnected, can_download: false };
+    } else if (url.startsWith('/api/batches')) body = {
+      batches: [demoBatch],
+      ...(url.includes('include_files=true') ? { batch_files: { [batchHash]: Buffer.from(batchJson).toString('base64') } } : {}),
+    };
+    else if (url === '/api/access') body = { authenticated: walletConnected, can_download: walletConnected };
     else if (url.startsWith('/api/auth/challenge')) body = { message: 'Demo sign-in challenge' };
     else if (url === '/api/auth/verify') body = { authenticated: true };
     else if (url === '/static/abi.json') body = [];
@@ -95,7 +102,8 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   };
   const window = { addEventListener() {}, ResizeObserver: null };
   const context = { document, window, localStorage, fetch, AbortSignal, console,
-    setTimeout, clearTimeout, Date, Map, Set, TextEncoder, TextDecoder };
+    setTimeout, clearTimeout, Date, Map, Set, TextEncoder, TextDecoder,
+    crypto: webcrypto, atob };
   vm.runInNewContext(fs.readFileSync(path.join(staticDir, 'app.js'), 'utf8'), context);
   await new Promise(resolve => setTimeout(resolve, 1250));
   assert.ok(sampleCount >= 2, `Expected repeat sampling, got ${sampleCount}`);
@@ -119,6 +127,9 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   await elements.get('wallet-login').listeners.click();
   assert.equal(walletConnected, true, 'Homepage wallet button must call the provider');
   assert.equal(elements.get('wallet-logout').hidden, false);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const cached = JSON.parse(saved.get('city-sensor-network:batch-json'));
+  assert.equal(cached[batchHash], batchJson, 'Authorized listing must preserve verified original JSON');
 }
 
 (async () => {

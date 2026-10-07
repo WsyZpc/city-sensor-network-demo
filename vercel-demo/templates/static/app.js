@@ -123,6 +123,18 @@ function initApp() {
     storageWrite(batchesStorageKey, JSON.stringify(result));
     return result;
   };
+  const cacheOriginalBatch = async (batch, encoded) => {
+    if (!batch?.sha256_hex || !encoded) return false;
+    const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+      .map(value => value.toString(16).padStart(2, "0")).join("");
+    if (digest !== batch.sha256_hex.toLowerCase().replace(/^0x/, "")) return false;
+    const contents = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    JSON.parse(contents);
+    const { batch_file_base64, ...metadata } = batch;
+    rememberBatches([metadata]);
+    return rememberBatchFile(batch.sha256_hex, contents);
+  };
 
 async function loadEthers() {
   if (typeof window.ethers !== "undefined") return true;
@@ -257,7 +269,7 @@ function renderBatches() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "button file-download";
-      button.textContent = cachedFile ? "下载 JSON" : "下载并缓存 JSON";
+      button.textContent = cachedFile ? "下载 JSON" : batch.cached_only ? "尝试找回 JSON" : "下载并缓存 JSON";
       button.title = cachedFile ? "从本机缓存下载已校验的 JSON" : "从服务下载、校验哈希并保存到本机";
       button.addEventListener("click", () => downloadBatchJson(batch, cachedFile));
       fileCell.append(button);
@@ -297,6 +309,9 @@ function renderBatches() {
         if (!response.ok) {
           let detail = "";
           try { detail = (await response.json()).detail || ""; } catch {}
+          if (response.status === 404 && batch.cached_only) {
+            throw new Error("此批次只缓存了指纹，原始 JSON 在在线临时存储中已不可用。哈希无法还原文件；请重新生成批次并保存新的 JSON。");
+          }
           throw new Error(detail || `JSON 下载失败（${response.status}）。`);
         }
         bytes = await response.arrayBuffer();
@@ -398,6 +413,12 @@ async function anchorBatch(batch) {
     return;
   }
   try {
+    if (!savedBatchFiles()[batch.sha256_hex]) {
+      await downloadBatchJson(batch);
+      if (!savedBatchFiles()[batch.sha256_hex]) {
+        throw new Error("上链前请先下载并缓存该批次的原始 JSON；仅有指纹无法供评审验证。");
+      }
+    }
     await initChain();
     if (!(await loadEthers())) throw new Error("区块链库加载失败，请检查网络后重试。");
     const { provider: web3Provider, signer } = await SensorWallet.connect(chainConfig);
@@ -542,7 +563,9 @@ async function refresh() {
     const data = await request(readingsUrl);
     let batchData = { batches: [] };
     try {
-      batchData = await request("/api/batches?limit=10");
+      batchData = await request(accessState?.can_download
+        ? "/api/batches?limit=10&include_files=true"
+        : "/api/batches?limit=10");
     } catch (error) {
       actionError = `批次列表暂时无法同步，已保留浏览器中的历史指纹：${error.message}`;
     }
@@ -557,6 +580,13 @@ async function refresh() {
     lastRefreshAt = Date.now();
     const anchors = savedAnchors();
     const currentBatches = rememberBatches(batchData.batches);
+    for (const batch of batchData.batches) {
+      const encoded = batchData.batch_files?.[batch.sha256_hex];
+      if (encoded && !savedBatchFiles()[batch.sha256_hex]) {
+        try { await cacheOriginalBatch(batch, encoded); }
+        catch (error) { console.warn("批次 JSON 缓存失败：", error); }
+      }
+    }
     batchList = currentBatches.map(batch => anchors[batch.sha256_hex] ? { ...batch, ...anchors[batch.sha256_hex] } : batch);
     render();
     renderBatches();
@@ -597,7 +627,10 @@ async function poll() {
       applyBrowserSample(reading);
       if (Date.now() - lastAutoSealAt >= 60000) {
         lastAutoSealAt = Date.now();
-        try { await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); }
+        try {
+          const batch = await request("/api/batches/seal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+          if (batch.batch_file_base64) await cacheOriginalBatch(batch, batch.batch_file_base64);
+        }
         catch (error) { actionError = `批次自动打包未完成：${error.message}`; }
         await refresh();
       }
@@ -622,6 +655,10 @@ async function action(path, body) {
   try {
     const result = await request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (path === "/api/sample") applyBrowserSample(result);
+    if (path === "/api/batches/seal" && result.batch_file_base64) {
+      const cached = await cacheOriginalBatch(result, result.batch_file_base64);
+      if (!cached) showToast("批次已生成，但本机 JSON 缓存失败。请立即点击下载并保存文件。", true);
+    }
     actionBusy = false;
     await refresh();
   } catch (error) {

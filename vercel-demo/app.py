@@ -2,6 +2,7 @@ r"""启动：.\.venv\Scripts\python.exe app.py，然后打开 http://127.0.0.1:8
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -278,17 +279,47 @@ def sample_once():
         raise HTTPException(status_code=503, detail="采样失败，请查看终端日志。") from error
 
 
+def batch_file_base64(batch: dict) -> str | None:
+    """Return only the original bytes matching the published batch fingerprint."""
+    path = batches.file_path(batch)
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != batch["sha256_hex"].lower():
+        logging.error("Batch file hash mismatch: %s", batch["file_name"])
+        return None
+    return base64.b64encode(data).decode("ascii")
+
+
+def can_download_batches(request: Request) -> bool:
+    address = session_address(request)
+    if address is None:
+        return False
+    try:
+        return chain.owner().lower() == address.lower() or chain.subscription(address, int(CHAIN_CONFIG["stream_id"]))["valid"]
+    except ChainError:
+        return False
+
+
 @app.get("/api/batches")
-def list_batches(limit: int = Query(default=10, ge=1, le=200)):
+def list_batches(request: Request, limit: int = Query(default=10, ge=1, le=200), include_files: bool = False):
     if os.environ.get("VERCEL") == "1" and not batches.list_recent(1):
         for _ in range(12):
             store.capture()
         batches.seal()
-    return {"batches": batches.list_recent(limit)}
+    recent = batches.list_recent(limit)
+    result = {"batches": recent}
+    if include_files and can_download_batches(request):
+        result["batch_files"] = {
+            batch["sha256_hex"]: contents
+            for batch in recent
+            if (contents := batch_file_base64(batch)) is not None
+        }
+    return result
 
 
 @app.post("/api/batches/seal", status_code=201)
-def seal_batch_now():
+def seal_batch_now(request: Request):
     batch = batches.seal()
     if batch is None and os.environ.get("VERCEL") == "1":
         # A request may land on a fresh serverless instance that only has its seed batch.
@@ -297,6 +328,10 @@ def seal_batch_now():
         batch = batches.seal()
     if batch is None:
         raise HTTPException(status_code=400, detail="没有未打包的新读数，无需创建批次。")
+    if can_download_batches(request):
+        contents = batch_file_base64(batch)
+        if contents is not None:
+            return {**batch, "batch_file_base64": contents}
     return batch
 
 
