@@ -3,6 +3,8 @@
   "chain_id_hex": "0x2a5",
   "chain_name": "BOT Chain Mainnet",
   "rpc_url": "https://rpc.botchain.ai",
+  "explorer_url": "",
   "native_symbol": "BOT",
-  "contract_address": "0xC55793411e9fC98288bA09976D607cEAf94650bB"
+  "contract_address": "0xC55793411e9fC98288bA09976D607cEAf94650bB",
+  "stream_id": 0
 }

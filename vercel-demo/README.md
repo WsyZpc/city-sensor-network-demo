@@ -8,6 +8,16 @@
 
 ![城市传感器网络 Demo 界面](docs/preview.jpg)
 
+## BOT Chain 主网部署
+
+项目已在 BOT Chain 主网完成 `SensorDataMarket` 合约部署：
+
+- Chain ID：`677`
+- RPC：<https://rpc.botchain.ai>
+- 原生代币：`BOT`
+- 合约地址：`0xC55793411e9fC98288bA09976D607cEAf94650bB`
+- 部署交易哈希：`0x6bf8fb17bd0d08dcd425f445bc5d23a520e6555b77f00bd4c0d9c9c89007051e`
+
 ## Demo 流程
 
 1. 后端每 5 秒生成一条模拟 PM2.5 和噪音数据，并保存到本地 SQLite。
