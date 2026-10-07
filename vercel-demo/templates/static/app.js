@@ -17,6 +17,7 @@ function initApp() {
   let lastAutoSealAt = Date.now();
   let actionError = "";
   const totalStorageKey = "city-sensor-network:max-total";
+  const batchesStorageKey = "city-sensor-network:batches";
   const anchorsStorageKey = "city-sensor-network:anchors";
   const savedAnchors = () => {
     try { return JSON.parse(localStorage.getItem(anchorsStorageKey) || "{}"); } catch { return {}; }
@@ -31,6 +32,16 @@ function initApp() {
     const next = storedTotal() + 1;
     localStorage.setItem(totalStorageKey, String(next));
     if (snapshot) snapshot.total = Math.max(Number(snapshot.total) || 0, next);
+  };
+  const savedBatches = () => {
+    try { return JSON.parse(localStorage.getItem(batchesStorageKey) || "[]"); } catch { return []; }
+  };
+  const rememberBatches = batches => {
+    const byHash = new Map(savedBatches().filter(batch => batch?.sha256_hex).map(batch => [batch.sha256_hex, { ...batch, cached_only: true }]));
+    for (const batch of batches) if (batch?.sha256_hex) byHash.set(batch.sha256_hex, { ...byHash.get(batch.sha256_hex), ...batch, cached_only: false });
+    const result = [...byHash.values()].slice(-30);
+    localStorage.setItem(batchesStorageKey, JSON.stringify(result));
+    return result;
   };
 
 async function loadEthers() {
@@ -149,11 +160,16 @@ function renderBatches() {
     }
     row.append(chainCell);
     const fileCell = document.createElement("td");
-    const link = document.createElement("a");
-    link.href = accessState?.can_download ? `/api/batches/${batch.batch_seq}/download` : "/subscribe";
-    link.textContent = accessState?.can_download ? "下载" : "先订阅";
-    if (accessState?.can_download) link.setAttribute("download", batch.file_name);
-    fileCell.append(link);
+    if (batch.cached_only) {
+      fileCell.textContent = "已缓存指纹";
+      fileCell.title = "该批次来自之前的临时实例，文件需在生成它的页面下载。";
+    } else {
+      const link = document.createElement("a");
+      link.href = accessState?.can_download ? `/api/batches/${batch.batch_seq}/download` : "/subscribe";
+      link.textContent = accessState?.can_download ? "下载" : "先订阅";
+      if (accessState?.can_download) link.setAttribute("download", batch.file_name);
+      fileCell.append(link);
+    }
     row.append(fileCell);
     ui.batches.append(row);
   }
@@ -320,13 +336,20 @@ async function refresh() {
   try {
     diagnostic(`第 ${version} 次刷新: 正在请求 /api/readings ...`);
     const readingsUrl = accessState?.can_download ? "/api/readings?limit=60" : "/api/readings?limit=3";
-    const [data, batchData] = await Promise.all([request(readingsUrl), request("/api/batches?limit=10")]);
+    const data = await request(readingsUrl);
+    let batchData = { batches: [] };
+    try {
+      batchData = await request("/api/batches?limit=10");
+    } catch (error) {
+      actionError = `批次列表暂时无法同步，已保留浏览器中的历史指纹：${error.message}`;
+    }
     if (version !== refreshVersion) return;
     diagnostic(`请求成功: total=${data.total}, batches=${batchData.batches.length}`);
     snapshot = data;
     if (data.sampling_mode === "browser") snapshot.sampling = browserSampling;
     const anchors = savedAnchors();
-    batchList = batchData.batches.map(batch => anchors[batch.sha256_hex] ? { ...batch, ...anchors[batch.sha256_hex] } : batch);
+    const currentBatches = rememberBatches(batchData.batches);
+    batchList = currentBatches.map(batch => anchors[batch.sha256_hex] ? { ...batch, ...anchors[batch.sha256_hex] } : batch);
     render();
     renderBatches();
     ui.error.hidden = !(data.sampling_error || actionError);
