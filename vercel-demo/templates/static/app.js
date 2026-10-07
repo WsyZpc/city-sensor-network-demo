@@ -1,7 +1,7 @@
 "use strict";
 
 function initApp() {
-  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "anchor-stage"].map(id => [id, document.getElementById(id)]));
+  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "anchor-stage", "toast"].map(id => [id, document.getElementById(id)]));
   const diagnostic = msg => {
     if (ui.diagnostic) ui.diagnostic.textContent = msg;
   };
@@ -19,6 +19,16 @@ function initApp() {
   const totalStorageKey = "city-sensor-network:max-total";
   const batchesStorageKey = "city-sensor-network:batches";
   const anchorsStorageKey = "city-sensor-network:anchors";
+  const batchFilesStorageKey = "city-sensor-network:batch-json";
+  let toastTimer;
+  const showToast = (message, isError = false) => {
+    if (!ui.toast) return;
+    ui.toast.textContent = message;
+    ui.toast.classList.toggle("error-toast", isError);
+    ui.toast.classList.add("visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => ui.toast.classList.remove("visible"), 3600);
+  };
   const savedAnchors = () => {
     try { return JSON.parse(localStorage.getItem(anchorsStorageKey) || "{}"); } catch { return {}; }
   };
@@ -35,6 +45,22 @@ function initApp() {
   };
   const savedBatches = () => {
     try { return JSON.parse(localStorage.getItem(batchesStorageKey) || "[]"); } catch { return []; }
+  };
+  const savedBatchFiles = () => {
+    try { return JSON.parse(localStorage.getItem(batchFilesStorageKey) || "{}"); } catch { return {}; }
+  };
+  const rememberBatchFile = (hash, contents) => {
+    try {
+      const files = savedBatchFiles();
+      files[hash] = contents;
+      const keep = new Set(savedBatches().map(batch => batch.sha256_hex).filter(Boolean).slice(-30));
+      const trimmed = Object.fromEntries(Object.entries(files).filter(([key]) => keep.has(key)).slice(-30));
+      localStorage.setItem(batchFilesStorageKey, JSON.stringify(trimmed));
+      return true;
+    } catch (error) {
+      console.warn("本机 JSON 缓存空间不足：", error);
+      return false;
+    }
   };
   const rememberBatches = batches => {
     const byHash = new Map(savedBatches().filter(batch => batch?.sha256_hex).map(batch => [batch.sha256_hex, { ...batch, cached_only: true }]));
@@ -160,18 +186,85 @@ function renderBatches() {
     }
     row.append(chainCell);
     const fileCell = document.createElement("td");
+    const cachedFile = savedBatchFiles()[batch.sha256_hex];
     if (batch.cached_only) {
-      fileCell.textContent = "本机缓存记录";
-      fileCell.title = "仅缓存了批次编号和 SHA-256 指纹，不包含 JSON 文件；链上状态请点击交易记录核验。";
+      const cacheLabel = document.createElement("span");
+      cacheLabel.className = "cache-status";
+      cacheLabel.textContent = cachedFile ? "本机缓存 · JSON 可下载" : "本机缓存 · 仅指纹";
+      cacheLabel.title = cachedFile
+        ? "JSON 文件保存在当前浏览器，可随时下载。"
+        : "本机保存了批次编号和哈希；原始 JSON 未缓存或已清理。";
+      fileCell.append(cacheLabel);
+    }
+    if (cachedFile || accessState?.can_download) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button file-download";
+      button.textContent = cachedFile ? "下载 JSON" : "下载并缓存 JSON";
+      button.title = cachedFile ? "从本机缓存下载已校验的 JSON" : "从服务下载、校验哈希并保存到本机";
+      button.addEventListener("click", () => downloadBatchJson(batch, cachedFile));
+      fileCell.append(button);
     } else {
       const link = document.createElement("a");
-      link.href = accessState?.can_download ? `/api/batches/${batch.batch_seq}/download` : "/subscribe";
-      link.textContent = accessState?.can_download ? "下载" : "先订阅";
-      if (accessState?.can_download) link.setAttribute("download", batch.file_name);
+      link.href = "/subscribe";
+      link.className = "file-subscribe";
+      link.textContent = "订阅后下载";
       fileCell.append(link);
     }
     row.append(fileCell);
     ui.batches.append(row);
+  }
+
+  async function downloadBatchJson(batch, cachedContents = "") {
+    try {
+      let contents = cachedContents;
+      let cached = Boolean(contents);
+      let bytes;
+      if (!contents) {
+        if (!accessState?.can_download) {
+          window.location.href = "/subscribe";
+          return;
+        }
+        const response = await fetch(`/api/hash/${encodeURIComponent(batch.sha256_hex)}/download`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal: AbortSignal.timeout(12000),
+        });
+        if (!response.ok) {
+          let detail = "";
+          try { detail = (await response.json()).detail || ""; } catch {}
+          throw new Error(detail || `JSON 下载失败（${response.status}）。`);
+        }
+        bytes = await response.arrayBuffer();
+      } else {
+        bytes = new TextEncoder().encode(contents);
+      }
+      const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+        .map(value => value.toString(16).padStart(2, "0")).join("");
+      if (digest.toLowerCase() !== batch.sha256_hex.toLowerCase().replace(/^0x/, "")) {
+        if (cached) {
+          const files = savedBatchFiles();
+          delete files[batch.sha256_hex];
+          localStorage.setItem(batchFilesStorageKey, JSON.stringify(files));
+        }
+        throw new Error("文件指纹与批次记录不一致，已停止下载。");
+      }
+      if (!contents) contents = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      JSON.parse(contents);
+      if (!cached) cached = rememberBatchFile(batch.sha256_hex, contents);
+      const blob = new Blob([contents], { type: "application/json;charset=utf-8" });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = batch.file_name || `sensor-batch-${batch.batch_seq}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      showToast(cached ? "JSON 已下载，并保存在此浏览器中。" : "JSON 已下载；浏览器存储空间不足，未能保留本机副本。", !cached);
+    } catch (error) {
+      showToast(error.message || "JSON 下载失败，请稍后重试。", true);
+    }
   }
   const verifiedBatches = batchList.filter(batch => batch.anchor_verified).length;
   if (ui["anchor-stage"]) {

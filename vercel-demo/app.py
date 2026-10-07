@@ -338,6 +338,25 @@ def find_by_hash(sha256_hex: str):
     return batch
 
 
+@app.get("/api/hash/{sha256_hex}/download")
+def download_batch_by_hash(sha256_hex: str, request: Request):
+    address = required_address(request)
+    try:
+        owner_access = chain.owner().lower() == address.lower()
+        allowed = owner_access or chain.subscription(address, int(CHAIN_CONFIG["stream_id"]))["valid"]
+    except ChainError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if not allowed:
+        raise HTTPException(status_code=403, detail="当前钱包没有有效订阅。请前往订阅页购买后再下载。")
+    batch = batches.find_by_hash(sha256_hex)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="该指纹对应的批次文件当前不可用。")
+    path = batches.file_path(batch)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="批次文件已丢失。")
+    return FileResponse(path, media_type="application/json", filename=batch["file_name"])
+
+
 class AnchorRequest(BaseModel):
     tx_hash: str
     sha256_hex: str | None = None
