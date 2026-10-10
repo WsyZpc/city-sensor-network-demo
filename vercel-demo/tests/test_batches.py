@@ -64,6 +64,19 @@ class BatchTests(unittest.TestCase):
         loaded = restarted.get(batch["batch_seq"])
         self.assertEqual(loaded["sha256_hex"], batch["sha256_hex"])
 
+    def test_batch_bytes_survive_cache_loss_and_restart(self):
+        self.store.capture()
+        batch = self.batches.seal()
+        original = self.batches.file_path(batch).read_bytes()
+        self.batches.file_path(batch).unlink()
+
+        restarted = BatchStore(self.database, self.files_dir)
+        restarted.initialize()
+        self.assertEqual(restarted.file_bytes(batch["batch_seq"]), original)
+        result = restarted.verify(batch["batch_seq"])
+        self.assertTrue(result["file_present"])
+        self.assertTrue(result["matches"])
+
     def test_verify_detects_tampering(self):
         self.store.capture()
         batch = self.batches.seal()
@@ -72,7 +85,13 @@ class BatchTests(unittest.TestCase):
         path = self.batches.file_path(batch)
         content = json.loads(path.read_bytes().decode("utf-8"))
         content["readings"][0]["pm25_ug_m3"] = 999.9
-        path.write_bytes(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        tampered_bytes = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        with self.batches.connect() as connection:
+            self.batches.db.execute(
+                connection,
+                "UPDATE batches SET file_content = ? WHERE batch_seq = ?",
+                (tampered_bytes, batch["batch_seq"]),
+            )
         result = self.batches.verify(batch["batch_seq"])
         self.assertFalse(result["matches"])
         self.assertIsNone(self.batches.find_by_hash(result["file_sha256"]))

@@ -7,25 +7,25 @@
 import hashlib
 import json
 import re
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from simulator import NODE_ID
+from storage import Database
 
 BATCH_WINDOW_SECONDS = 60
 
 
 class BatchStore:
-    def __init__(self, database: Path, files_dir: Path):
+    def __init__(self, database: str | Path, files_dir: Path):
+        self.db = Database(database)
         self.database = database
         self.files_dir = files_dir
 
     @contextmanager
     def connect(self):
-        connection = sqlite3.connect(self.database, timeout=10)
-        connection.row_factory = sqlite3.Row
+        connection = self.db.connect()
         try:
             with connection:
                 yield connection
@@ -35,9 +35,9 @@ class BatchStore:
     def initialize(self):
         self.files_dir.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
-            connection.execute("""
+            self.db.execute(connection, """
                 CREATE TABLE IF NOT EXISTS batches (
-                    batch_seq INTEGER PRIMARY KEY,
+                    batch_seq {sequence_type} PRIMARY KEY,
                     node_id TEXT NOT NULL,
                     first_sequence INTEGER NOT NULL,
                     last_sequence INTEGER NOT NULL,
@@ -46,12 +46,22 @@ class BatchStore:
                     file_name TEXT NOT NULL,
                     sha256_hex TEXT NOT NULL UNIQUE,
                     anchor_tx TEXT,
-                    anchor_proof TEXT
+                    anchor_proof TEXT,
+                    file_content {blob_type}
                 )
-            """)
-            existing_columns = {row["name"] for row in connection.execute("PRAGMA table_info(batches)")}
-            if "anchor_proof" not in existing_columns:
-                connection.execute("ALTER TABLE batches ADD COLUMN anchor_proof TEXT")
+            """.format(
+                sequence_type="BIGINT" if self.db.is_postgres else "INTEGER",
+                blob_type="BYTEA" if self.db.is_postgres else "BLOB",
+            ))
+            if self.db.is_postgres:
+                self.db.execute(connection, "ALTER TABLE batches ADD COLUMN IF NOT EXISTS anchor_proof TEXT")
+                self.db.execute(connection, "ALTER TABLE batches ADD COLUMN IF NOT EXISTS file_content BYTEA")
+            else:
+                existing_columns = {row["name"] for row in self.db.execute(connection, "PRAGMA table_info(batches)")}
+                if "anchor_proof" not in existing_columns:
+                    self.db.execute(connection, "ALTER TABLE batches ADD COLUMN anchor_proof TEXT")
+                if "file_content" not in existing_columns:
+                    self.db.execute(connection, "ALTER TABLE batches ADD COLUMN file_content BLOB")
 
     def file_path(self, batch: dict) -> Path:
         return self.files_dir / batch["file_name"]
@@ -59,6 +69,7 @@ class BatchStore:
     @staticmethod
     def _serialize(row) -> dict:
         result = dict(row)
+        result.pop("file_content", None)
         raw_proof = result.get("anchor_proof")
         try:
             proof = json.loads(raw_proof) if raw_proof else None
@@ -78,16 +89,17 @@ class BatchStore:
     def seal(self) -> dict | None:
         """把尚未打包的读数写成一个批次文件。没有新读数时返回 None。"""
         with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            sealed_upto = connection.execute(
+            self.db.execute(connection, "BEGIN IMMEDIATE")
+            self.db.lock_sequences(connection, 71002)
+            sealed_upto = self.db.execute(connection,
                 "SELECT COALESCE(MAX(last_sequence), 0) FROM batches"
             ).fetchone()[0]
-            rows = connection.execute(
+            rows = self.db.execute(connection,
                 "SELECT * FROM readings WHERE sequence > ? ORDER BY sequence", (sealed_upto,)
             ).fetchall()
             if not rows:
                 return None
-            batch_seq = connection.execute(
+            batch_seq = self.db.execute(connection,
                 "SELECT COALESCE(MAX(batch_seq), 0) + 1 FROM batches"
             ).fetchone()[0]
             sealed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -111,7 +123,6 @@ class BatchStore:
             }
             data = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
             file_name = f"batch-{batch_seq:06d}.json"
-            (self.files_dir / file_name).write_bytes(data)
             sha256_hex = hashlib.sha256(data).hexdigest()
             batch = {
                 "batch_seq": batch_seq,
@@ -123,25 +134,27 @@ class BatchStore:
                 "file_name": file_name,
                 "sha256_hex": sha256_hex,
                 "anchor_tx": None,
+                "file_content": data,
             }
-            connection.execute("""
+            self.db.execute(connection, """
                 INSERT INTO batches (batch_seq, node_id, first_sequence, last_sequence,
-                                     reading_count, sealed_at, file_name, sha256_hex, anchor_tx)
+                                     reading_count, sealed_at, file_name, sha256_hex, anchor_tx, file_content)
                 VALUES (:batch_seq, :node_id, :first_sequence, :last_sequence,
-                        :reading_count, :sealed_at, :file_name, :sha256_hex, :anchor_tx)
+                        :reading_count, :sealed_at, :file_name, :sha256_hex, :anchor_tx, :file_content)
             """, batch)
-            return batch
+        (self.files_dir / file_name).write_bytes(data)
+        return {key: value for key, value in batch.items() if key != "file_content"}
 
     def list_recent(self, limit: int) -> list[dict]:
         with self.connect() as connection:
-            rows = connection.execute(
+            rows = self.db.execute(connection,
                 "SELECT * FROM batches ORDER BY batch_seq DESC LIMIT ?", (limit,)
             ).fetchall()
             return [self._serialize(row) for row in rows]
 
     def get(self, batch_seq: int) -> dict | None:
         with self.connect() as connection:
-            row = connection.execute(
+            row = self.db.execute(connection,
                 "SELECT * FROM batches WHERE batch_seq = ?", (batch_seq,)
             ).fetchone()
             return self._serialize(row) if row else None
@@ -149,7 +162,7 @@ class BatchStore:
     def find_by_hash(self, sha256_hex: str) -> dict | None:
         normalized = sha256_hex.strip().lower().removeprefix("0x")
         with self.connect() as connection:
-            row = connection.execute(
+            row = self.db.execute(connection,
                 "SELECT * FROM batches WHERE sha256_hex = ?", (normalized,)
             ).fetchone()
             return self._serialize(row) if row else None
@@ -162,7 +175,7 @@ class BatchStore:
                 or proof.get("transaction_hash", "").lower() != normalized):
             return None
         with self.connect() as connection:
-            row = connection.execute(
+            row = self.db.execute(connection,
                 "SELECT * FROM batches WHERE batch_seq = ?", (batch_seq,)
             ).fetchone()
             if row is None:
@@ -174,11 +187,11 @@ class BatchStore:
                 if not existing["anchor_verified"]:
                     return None
                 return existing
-            connection.execute(
+            self.db.execute(connection,
                 "UPDATE batches SET anchor_tx = ?, anchor_proof = ? WHERE batch_seq = ? AND anchor_tx IS NULL",
                 (normalized, json.dumps(proof, sort_keys=True), batch_seq),
             )
-            return self._serialize(connection.execute(
+            return self._serialize(self.db.execute(connection,
                 "SELECT * FROM batches WHERE batch_seq = ?", (batch_seq,)
             ).fetchone())
 
@@ -187,13 +200,26 @@ class BatchStore:
         batch = self.get(batch_seq)
         if batch is None:
             return None
-        path = self.file_path(batch)
-        if not path.exists():
+        data = self.file_bytes(batch_seq)
+        if data is None:
             return {**batch, "file_present": False, "matches": False, "file_sha256": None}
-        file_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        file_sha256 = hashlib.sha256(data).hexdigest()
         return {
             **batch,
             "file_present": True,
             "file_sha256": file_sha256,
             "matches": file_sha256 == batch["sha256_hex"],
         }
+
+    def file_bytes(self, batch_seq: int) -> bytes | None:
+        """Return exact sealed bytes from durable storage, with legacy file fallback."""
+        with self.connect() as connection:
+            row = self.db.execute(
+                connection, "SELECT file_content, file_name FROM batches WHERE batch_seq = ?", (batch_seq,)
+            ).fetchone()
+            if row is None:
+                return None
+            if row["file_content"] is not None:
+                return bytes(row["file_content"])
+            path = self.files_dir / row["file_name"]
+            return path.read_bytes() if path.exists() else None

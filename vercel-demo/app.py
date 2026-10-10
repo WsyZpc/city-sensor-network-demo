@@ -25,10 +25,14 @@ from wallet_auth import WalletSessions
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = Path("/tmp/city-sensor-network-demo") if os.environ.get("VERCEL") == "1" else ROOT / "data"
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+POSTGRES_CONFIGURED = DATABASE_URL.startswith(("postgres://", "postgresql://"))
 DATA_DIR = Path(os.environ.get("SENSOR_DATA_DIR", str(DEFAULT_DATA_DIR)))
 SAMPLING_INTERVAL_SECONDS = 1 if os.environ.get("VERCEL") == "1" else INTERVAL_SECONDS
-store = ReadingStore(DATA_DIR / "sensors.sqlite3")
-batches = BatchStore(DATA_DIR / "sensors.sqlite3", DATA_DIR / "batches")
+DATABASE_LOCATION = DATABASE_URL or str(DATA_DIR / "sensors.sqlite3")
+store = ReadingStore(DATABASE_LOCATION)
+batches = BatchStore(DATABASE_LOCATION, DATA_DIR / "batches")
+PERSISTENT_STORAGE = POSTGRES_CONFIGURED or os.environ.get("VERCEL") != "1"
 CHAIN_CONFIG = json.loads((ROOT / "templates" / "static" / "chain-config.json").read_text(encoding="utf-8"))
 chain = BotChain(CHAIN_CONFIG)
 wallet_sessions = WalletSessions()
@@ -265,6 +269,8 @@ def readings(request: Request, limit: int = Query(default=3, ge=1, le=500)):
         "sampling_error": app.state.sampling_error,
         "interval_seconds": SAMPLING_INTERVAL_SECONDS,
         "sampling_mode": "browser" if os.environ.get("VERCEL") == "1" else "server",
+        "storage_backend": "postgresql" if POSTGRES_CONFIGURED else "sqlite",
+        "persistent_storage": PERSISTENT_STORAGE,
         "anchored": False,
         "preview_only": preview_only,
         "access_warning": access_warning,
@@ -292,10 +298,9 @@ def sample_once():
 
 def batch_file_base64(batch: dict) -> str | None:
     """Return only the original bytes matching the published batch fingerprint."""
-    path = batches.file_path(batch)
-    if not path.is_file():
+    data = batches.file_bytes(batch["batch_seq"])
+    if data is None:
         return None
-    data = path.read_bytes()
     if hashlib.sha256(data).hexdigest() != batch["sha256_hex"].lower():
         logging.error("Batch file hash mismatch: %s", batch["file_name"])
         return None
@@ -367,10 +372,12 @@ def download_batch(batch_seq: int, request: Request):
     batch = batches.get(batch_seq)
     if batch is None:
         raise HTTPException(status_code=404, detail="批次不存在。")
-    path = batches.file_path(batch)
-    if not path.exists():
+    file_content = batches.file_bytes(batch_seq)
+    if file_content is None:
         raise HTTPException(status_code=404, detail="批次文件已丢失。")
-    return FileResponse(path, media_type="application/json", filename=batch["file_name"])
+    return Response(content=file_content, media_type="application/json", headers={
+        "Content-Disposition": f'attachment; filename="{batch["file_name"]}"'
+    })
 
 
 @app.get("/api/batches/{batch_seq}/verify")
@@ -402,10 +409,12 @@ def download_batch_by_hash(sha256_hex: str, request: Request):
     batch = batches.find_by_hash(sha256_hex)
     if batch is None:
         raise HTTPException(status_code=404, detail="该指纹对应的批次文件当前不可用。")
-    path = batches.file_path(batch)
-    if not path.exists():
+    file_content = batches.file_bytes(batch["batch_seq"])
+    if file_content is None:
         raise HTTPException(status_code=404, detail="批次文件已丢失。")
-    return FileResponse(path, media_type="application/json", filename=batch["file_name"])
+    return Response(content=file_content, media_type="application/json", headers={
+        "Content-Disposition": f'attachment; filename="{batch["file_name"]}"'
+    })
 
 
 class AnchorRequest(BaseModel):

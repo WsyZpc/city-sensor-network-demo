@@ -681,6 +681,13 @@ function render() {
   ui.pm25.textContent = latest ? latest.pm25_ug_m3.toFixed(1) : "—";
   ui.noise.textContent = latest ? latest.noise_db.toFixed(1) : "—";
   ui.total.textContent = rememberTotal(snapshot.total).toLocaleString("zh-CN");
+  const durable = snapshot.persistent_storage === true;
+  const storageFoot = document.getElementById("storage-foot");
+  const storageDetail = document.getElementById("storage-detail");
+  if (storageFoot) storageFoot.textContent = durable ? `已保存至${snapshot.storage_backend === "postgresql" ? "云端数据库" : "本机 SQLite"}` : "临时存储 · 重启可能清空";
+  if (storageDetail) storageDetail.textContent = durable
+    ? `已写入${snapshot.storage_backend === "postgresql" ? "共享 PostgreSQL 数据库" : "本机 SQLite 数据库"}，服务重启后仍可读取`
+    : "当前使用实例临时数据库，重启后数据可能重置；配置 DATABASE_URL 启用持久化";
   ui.status.textContent = snapshot.sampling_error ? "采样异常" : snapshot.sampling ? "● 自动采样中" : "Ⅱ 自动采样已暂停";
   ui.toggle.textContent = snapshot.sampling ? "暂停采样" : "继续采样";
   ui.records.replaceChildren();

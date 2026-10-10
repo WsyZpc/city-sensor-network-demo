@@ -31,7 +31,7 @@
     <section class="metrics" aria-label="最新监测读数">
       <article class="metric"><div class="metric-title">PM2.5 浓度 <span>01</span></div><div class="metric-value"><strong id="pm25">—</strong><span>μg/m³</span></div><div class="metric-foot"><i></i> 最新模拟读数</div></article>
       <article class="metric"><div class="metric-title">环境噪音 <span>02</span></div><div class="metric-value"><strong id="noise">—</strong><span>dB</span></div><div class="metric-foot"><i class="blue"></i> 最新模拟读数</div></article>
-      <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot">当前浏览器累计 · 清除站点数据后重置</div></article>
+      <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot" id="storage-foot">正在检查保存方式</div></article>
     </section>
     <section class="chart-panel panel">
       <div class="panel-heading"><div><h2>环境数据趋势</h2><p>最近 60 条采样 · 横轴为本地时间</p></div><div class="chart-tabs" role="group" aria-label="选择图表指标"><button class="selected" data-metric="pm25_ug_m3" aria-pressed="true">PM2.5</button><button data-metric="noise_db" aria-pressed="false">噪音</button></div></div>
@@ -40,7 +40,7 @@
     </section>
     <section class="bottom-grid">
       <div class="panel records-panel"><div class="panel-heading"><div><h2>最近采样记录</h2><p>保留原始时间、序号与读数</p></div><span class="tiny-label">LATEST 8</span></div><div class="table-wrap"><table><thead><tr><th>序号</th><th>采样时间</th><th>PM2.5 <small>μg/m³</small></th><th>噪音 <small>dB</small></th><th>来源</th></tr></thead><tbody id="records"><tr><td colspan="5">正在连接云端服务…</td></tr></tbody></table></div></div>
-      <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>在线页面每秒请求一次采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p>演示临时存储，实例重启后可能重置</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔 BOT Chain 主网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>BOT Chain 主网订阅合约已连接，交易待演示</p></div></div></div>
+      <div class="panel pipeline"><h2>数据走到哪一步了？</h2><div class="pipeline-item"><span class="step active">1</span><div><strong>生成模拟读数</strong><p>在线页面每秒请求一次采样</p></div></div><div class="pipeline-item"><span class="step active">2</span><div><strong>保存原始数据</strong><p id="storage-detail">正在检查持久化存储状态</p></div></div><div class="pipeline-item"><span class="step">3</span><div><strong>提交链上存证</strong><p id="anchor-stage">等待首笔 BOT Chain 主网交易</p></div></div><div class="pipeline-item"><span class="step active">4</span><div><strong>付费订阅与验证</strong><p>BOT Chain 主网订阅合约已连接，交易待演示</p></div></div></div>
     </section>
     <section class="panel batches-panel">
       <div class="panel-heading"><div><h2>数据批次与存证指纹</h2><p>游客可看实时预览；数据方签名登录后生成并上链批次；有效订阅者可下载当前可用的完整 JSON。</p></div><div class="batch-actions"><button id="sample-json" class="button secondary" disabled>下载测试 JSON</button><button id="seal" class="button primary" disabled>连接数据方钱包后打包</button></div></div>
