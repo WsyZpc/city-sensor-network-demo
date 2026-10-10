@@ -29,7 +29,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 POSTGRES_CONFIGURED = DATABASE_URL.startswith(("postgres://", "postgresql://"))
 DATA_DIR = Path(os.environ.get("SENSOR_DATA_DIR", str(DEFAULT_DATA_DIR)))
 SAMPLING_INTERVAL_SECONDS = 1 if os.environ.get("VERCEL") == "1" else INTERVAL_SECONDS
-DATABASE_LOCATION = DATABASE_URL or str(DATA_DIR / "sensors.sqlite3")
+DATABASE_LOCATION = DATABASE_URL or DATA_DIR / "sensors.sqlite3"
 store = ReadingStore(DATABASE_LOCATION)
 batches = BatchStore(DATABASE_LOCATION, DATA_DIR / "batches")
 PERSISTENT_STORAGE = POSTGRES_CONFIGURED or os.environ.get("VERCEL") != "1"

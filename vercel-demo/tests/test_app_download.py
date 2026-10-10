@@ -35,10 +35,10 @@ class FakeBatches:
     def find_by_hash(self, sha256_hex):
         if sha256_hex.removeprefix("0x") != HASH:
             return None
-        return {"sha256_hex": HASH, "file_name": "sensor-batch-test.json"}
+        return {"batch_seq": 1, "sha256_hex": HASH, "file_name": "sensor-batch-test.json"}
 
-    def file_path(self, batch):
-        return self.path
+    def file_bytes(self, batch_seq):
+        return self.path.read_bytes()
 
 
 class BatchDownloadTests(unittest.TestCase):
@@ -72,10 +72,10 @@ class BatchDownloadTests(unittest.TestCase):
 
             class RecentBatches:
                 def list_recent(self, limit):
-                    return [{"sha256_hex": fingerprint, "file_name": path.name}]
+                    return [{"batch_seq": 1, "sha256_hex": fingerprint, "file_name": path.name}]
 
-                def file_path(self, batch):
-                    return path
+                def file_bytes(self, batch_seq):
+                    return path.read_bytes()
 
             with (
                 patch.object(webapp, "session_address", return_value=OWNER),
@@ -102,7 +102,7 @@ class BatchDownloadTests(unittest.TestCase):
             path = Path(directory) / "batch.json"
             path.write_bytes(b'{}')
             with patch.object(webapp, "batches", FakeBatches(path)):
-                self.assertIsNone(webapp.batch_file_base64({"file_name": path.name, "sha256_hex": HASH}))
+                self.assertIsNone(webapp.batch_file_base64({"batch_seq": 1, "file_name": path.name, "sha256_hex": HASH}))
 
     def test_download_by_hash_requires_access_and_returns_exact_file(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -115,7 +115,7 @@ class BatchDownloadTests(unittest.TestCase):
                 patch.object(webapp, "batches", FakeBatches(path)),
             ):
                 response = webapp.download_batch_by_hash(HASH, request)
-                self.assertEqual(Path(response.path), path)
+                self.assertEqual(response.body, path.read_bytes())
                 self.assertEqual(response.media_type, "application/json")
 
     def test_download_by_hash_rejects_non_subscriber(self):
