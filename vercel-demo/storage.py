@@ -18,6 +18,12 @@ class HybridRow(dict):
 
 
 def _hybrid_row(cursor):
+    # PostgreSQL DDL statements (for example CREATE TABLE) have no result
+    # description. Psycopg still asks the row factory to prepare a maker for
+    # those statements, so provide a harmless tuple maker in that case.
+    if cursor.description is None:
+        return lambda values: values
+
     columns = [column.name for column in cursor.description]
 
     def make_row(values):

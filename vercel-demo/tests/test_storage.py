@@ -3,7 +3,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from storage import ReadingStore
+from storage import ReadingStore, _hybrid_row
 
 
 class StorageTests(unittest.TestCase):
@@ -44,6 +44,13 @@ class StorageTests(unittest.TestCase):
             self.assertGreaterEqual(item["pm25_ug_m3"], 0)
             self.assertGreaterEqual(item["noise_db"], 0)
             self.assertTrue(item["recorded_at"].endswith("+00:00"))
+
+    def test_postgres_row_factory_handles_statements_without_result_columns(self):
+        class CursorWithoutDescription:
+            description = None
+
+        make_row = _hybrid_row(CursorWithoutDescription())
+        self.assertEqual(make_row((1, "ok")), (1, "ok"))
 
 
 if __name__ == "__main__":
