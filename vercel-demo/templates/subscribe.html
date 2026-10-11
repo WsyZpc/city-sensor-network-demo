@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>数据订阅 · 城市传感器网络</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261008-1">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-2">
 </head>
 <body class="subscribe-page">
   <aside class="sidebar">
@@ -21,19 +21,34 @@
     <header class="page-header">
       <div><div class="eyebrow">SUBSCRIBE · PAY · ACCESS</div><h1>演示数据订阅权限<span>。</span></h1><p>连接钱包，通过 BOT Chain 演示订阅、权限核验与受控下载。</p></div>
     </header>
-    <section class="panel">
+    <section class="panel subscribe-plan">
       <div class="panel-heading"><div><h2>订阅选项</h2><p id="stream-info">正在加载链上数据流信息…</p></div></div>
       <div class="subscribe-option">
-        <div>
+        <div class="subscribe-copy">
+          <span class="subscribe-kicker">DATA ACCESS · BOT CHAIN</span>
           <h3 id="stream-name">武汉空气质量数据流</h3>
           <p>有效订阅可解锁在线服务中仍可用的完整批次 JSON；实时预览对游客开放。</p>
+          <span class="subscribe-copy-note"><i></i> 链上订阅 · 可审计的数据访问权限</span>
         </div>
-        <div class="subscribe-action">
-          <div class="price"><span id="price-per-day">—</span> <span>BOT/天</span></div>
-          <label>订阅天数 <input type="number" id="days" value="30" min="1" max="365"></label>
-          <div class="price" id="total-price">— BOT</div>
-          <button id="connect" class="button primary">连接钱包</button>
-          <button id="subscribe" class="button primary" disabled>购买订阅</button>
+        <div class="subscribe-purchase">
+          <div class="subscribe-metrics">
+            <div class="subscription-metric">
+              <span>每日费率</span>
+              <strong><span id="price-per-day">—</span><small>BOT / 天</small></strong>
+            </div>
+            <label class="subscription-metric" for="days">
+              <span>订阅天数</span>
+              <input type="number" id="days" value="30" min="1" max="365">
+            </label>
+            <div class="subscription-metric subscription-total">
+              <span>预计支付</span>
+              <strong id="total-price">— BOT</strong>
+            </div>
+          </div>
+          <div class="subscribe-buttons">
+            <button id="connect" class="button secondary">连接钱包</button>
+            <button id="subscribe" class="button primary" disabled>购买订阅</button>
+          </div>
         </div>
       </div>
     </section>

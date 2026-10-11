@@ -37,3 +37,37 @@ th{background:#f0f8f1;color:#59806b;border-color:#e4efe5}td{color:#496e5a;border
 .notice #chain-status{display:block;margin-top:5px;color:#308668;font-size:11px;font-weight:700}
 .anchor-feedback{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin:0 23px 17px;padding:14px 17px;border:1px solid #cfe8d7;border-radius:12px;background:linear-gradient(105deg,#eef9ef,#f7fdf8);color:#567763;font-size:11px;line-height:1.6}.anchor-feedback strong{color:#235d43;font-size:12px;white-space:nowrap}.anchor-feedback span{flex:1;min-width:210px}.anchor-feedback a{display:inline-flex;align-items:center;padding:7px 11px;border-radius:8px;background:#e0f3e7;color:#187557;font-weight:700;white-space:nowrap}.anchor-feedback a:hover{background:#c9ead7;text-decoration:none}.anchor-feedback.pending{border-color:#d8e2b6;background:#f8faeb}.anchor-feedback.confirmed{border-color:#78caa1;background:linear-gradient(100deg,#ddf5e6,#effbf0);box-shadow:0 7px 20px #2d9f6420}.anchor-feedback.confirmed strong{color:#08754d}
 @media(max-width:800px){.anchor-feedback{margin:0 16px 14px}.anchor-feedback span{min-width:100%}}
+
+/* Subscription layout and chart motion refinements */
+.subscribe-page .subscribe-plan{overflow:hidden}
+.subscribe-page .subscribe-plan>.panel-heading{padding:22px 28px 0}
+.subscribe-page .subscribe-option{grid-template-columns:minmax(260px,.78fr) minmax(0,1.42fr);gap:clamp(20px,3vw,44px);align-items:stretch;padding:22px 28px 28px}
+.subscribe-page .subscribe-copy{display:flex;flex-direction:column;justify-content:center;max-width:none!important;min-width:0;padding:25px 27px!important;border:1px solid #dcefe1;border-radius:16px;background:radial-gradient(circle at 100% 0,#e1f5df 0,transparent 48%),linear-gradient(145deg,#f3fbef,#f9fffb);box-shadow:inset 0 1px #ffffff}
+.subscribe-page .subscribe-kicker{margin-bottom:13px;color:#5b9b79;font-size:9px;font-weight:750;letter-spacing:1.8px}
+.subscribe-page .subscribe-copy h3{color:#174e3a;font-size:clamp(19px,1.45vw,24px);line-height:1.35;letter-spacing:-.35px}
+.subscribe-page .subscribe-copy h3+p{max-width:390px;margin:11px 0 0;color:#648473;font-size:12px;line-height:1.8}
+.subscribe-copy-note{display:flex;align-items:center;gap:8px;margin-top:22px;color:#53826a;font-size:10px;font-weight:600}
+.subscribe-copy-note i{width:7px;height:7px;border-radius:50%;background:#39a878;box-shadow:0 0 0 4px #39a8781c}
+.subscribe-page .subscribe-purchase{display:grid;align-content:center;gap:13px;min-width:0}
+.subscribe-page .subscribe-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;min-width:0}
+.subscribe-page .subscription-metric{display:flex;min-width:0;min-height:91px;flex-direction:column;justify-content:space-between;gap:9px;padding:14px 16px;border:1px solid #e2eee4;border-radius:13px;background:linear-gradient(150deg,#fff,#f8fcf8);color:#718a7b}
+.subscribe-page .subscription-metric>span:first-child{font-size:10px;font-weight:650}
+.subscribe-page .subscription-metric strong{display:flex;align-items:baseline;gap:6px;min-width:0;color:#1f654a;font-size:clamp(17px,1.35vw,22px);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.subscribe-page .subscription-metric strong small{color:#799684;font-size:10px;font-weight:600}
+.subscribe-page .subscription-total{border-color:#cde8d6;background:linear-gradient(145deg,#f0faef,#e9f8ee)}
+.subscribe-page .subscription-total strong{color:#11775b}
+.subscribe-page .subscription-metric input#days{width:100%;height:39px;min-width:0;padding:0 10px;border:1px solid #cfe4d4;border-radius:8px;background:#fff;color:#234a38;font-family:inherit;font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;outline:none;transition:border-color .18s ease,box-shadow .18s ease}
+.subscribe-page .subscription-metric input#days:focus{border-color:#44a477;box-shadow:0 0 0 4px #44a47720}
+.subscribe-page .subscribe-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.subscribe-page .subscribe-buttons .button{width:100%;min-width:0;min-height:47px;padding:10px 14px;border-radius:10px;font-size:12px;font-weight:700;white-space:nowrap}
+.subscribe-page .subscribe-buttons .button.secondary{border-color:#cfe7d6;background:#f5fcf5;color:#26714f}
+.subscribe-page .subscribe-buttons .button.secondary:hover{background:#e8f6e9}
+.subscribe-page .subscribe-buttons .button.primary{background:linear-gradient(110deg,#16836a,#2ba579);border-color:#16836a;box-shadow:0 6px 16px #16836a20}
+.subscribe-page .subscribe-buttons .button.primary:hover{background:linear-gradient(110deg,#126e59,#218e67)}
+.subscribe-page .subscribe-buttons .button.primary:disabled{background:#c3dece;border-color:#c3dece;box-shadow:none;color:#f8fff9}
+.chart-series{transform-box:fill-box;transform-origin:center;animation:chart-arrive .32s cubic-bezier(.2,.75,.25,1) both}
+.chart-latest{transform-box:fill-box;transform-origin:center;animation:chart-pulse 1.8s ease-out infinite}
+@keyframes chart-arrive{from{transform:translateX(13px);opacity:.72}to{transform:translateX(0);opacity:1}}
+@keyframes chart-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.28);opacity:.78}}
+@media(max-width:1150px){.subscribe-page .subscribe-option{grid-template-columns:1fr;padding-top:18px}.subscribe-page .subscribe-copy{min-height:0}.subscribe-page .subscribe-copy h3+p{max-width:650px}.subscribe-page .subscribe-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){.subscribe-page .subscribe-plan>.panel-heading{padding:18px 17px 0}.subscribe-page .subscribe-option{padding:15px 17px 18px;gap:13px}.subscribe-page .subscribe-copy{padding:18px!important}.subscribe-copy-note{margin-top:14px}.subscribe-page .subscribe-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.subscribe-page .subscription-metric{min-height:82px;padding:12px}.subscribe-page .subscription-total{grid-column:1/-1;min-height:68px}.subscribe-page .subscription-metric strong{font-size:18px}.subscribe-page .subscribe-buttons{gap:8px}.subscribe-page .subscribe-buttons .button{padding:10px 8px;font-size:11px}}

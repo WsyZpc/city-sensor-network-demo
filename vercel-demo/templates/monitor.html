@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>城市传感器网络 · 节点控制台</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261008-1">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-2">
   <script src="/static/wallet.js?v=20261008-1" defer></script>
-  <script src="/static/app.js?v=20261008-1" defer></script>
+  <script src="/static/app.js?v=20261012-2" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -34,7 +34,7 @@
       <article class="metric"><div class="metric-title">累计采样 <span>03</span></div><div class="metric-value"><strong id="total">—</strong><span>条</span></div><div class="metric-foot" id="storage-foot">正在检查保存方式</div></article>
     </section>
     <section class="chart-panel panel">
-      <div class="panel-heading"><div><h2>环境数据趋势</h2><p>最近 60 条采样 · 横轴为本地时间</p></div><div class="chart-tabs" role="group" aria-label="选择图表指标"><button class="selected" data-metric="pm25_ug_m3" aria-pressed="true">PM2.5</button><button data-metric="noise_db" aria-pressed="false">噪音</button></div></div>
+      <div class="panel-heading"><div><h2>环境数据趋势</h2><p>最近 24 条采样 · 滚动展示，本地时间</p></div><div class="chart-tabs" role="group" aria-label="选择图表指标"><button class="selected" data-metric="pm25_ug_m3" aria-pressed="true">PM2.5</button><button data-metric="noise_db" aria-pressed="false">噪音</button></div></div>
       <div class="chart-label"><span id="chart-unit">浓度 · μg/m³</span><span id="chart-range">等待数据</span></div>
       <div class="chart-wrap"><svg id="chart" role="img" aria-label="模拟 PM2.5 最近采样趋势"></svg><div id="chart-empty">等待第一条采样数据…</div></div>
     </section>

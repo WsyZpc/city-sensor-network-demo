@@ -262,7 +262,8 @@ async function request(path, options = {}) {
 
 function drawChart() {
   if (!snapshot?.readings.length) return;
-  const readings = snapshot.readings;
+  // Keep a shorter rolling window so each new sample moves farther across the chart.
+  const readings = snapshot.readings.slice(-24);
   const width = Math.max(240, ui.chart.clientWidth);
   const height = ui.chart.clientHeight;
   const left = 38, right = 12, top = 15, bottom = 29;
@@ -283,16 +284,19 @@ function drawChart() {
     const position = y(value);
     svg += `<line x1="${left}" x2="${width - right}" y1="${position}" y2="${position}" stroke="#edf1f1" stroke-dasharray="3 4"/><text x="0" y="${position + 3}" fill="#a0afb2" font-size="9">${value.toFixed(1)}</text>`;
   }
+  svg += `<g class="chart-series">`;
   if (readings.length > 1) svg += `<polygon points="${x(0)},${height - bottom} ${points} ${x(readings.length - 1)},${height - bottom}" fill="url(#chart-fill)"/>`;
-  svg += `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  svg += `<polyline points="${points}" fill="none" stroke="${color}" stroke-opacity=".16" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`;
+  svg += `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
   const last = readings.length - 1;
-  svg += `<circle cx="${x(last)}" cy="${y(values[last])}" r="4" fill="${color}" stroke="white" stroke-width="2"/>`;
+  svg += `<circle class="chart-latest" cx="${x(last)}" cy="${y(values[last])}" r="4.5" fill="${color}" stroke="white" stroke-width="2.5"/>`;
   const count = Math.min(width < 480 ? 3 : 5, readings.length);
   const indices = [...new Set(Array.from({ length: count }, (_, index) => count === 1 ? 0 : Math.round(last * index / (count - 1))))];
   for (const index of indices) {
     const anchor = count === 1 ? "middle" : index === 0 ? "start" : index === last ? "end" : "middle";
     svg += `<text x="${x(index)}" y="${height - 5}" text-anchor="${anchor}" fill="#a0afb2" font-size="9">${time(readings[index].recorded_at)}</text>`;
   }
+  svg += `</g>`;
   ui.chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
   ui.chart.setAttribute("aria-label", `${metric === "pm25_ug_m3" ? "PM2.5" : "噪音"}模拟趋势，共 ${readings.length} 条记录，最新值 ${values.at(-1)}`);
   ui.chart.innerHTML = svg;
