@@ -71,3 +71,37 @@ th{background:#f0f8f1;color:#59806b;border-color:#e4efe5}td{color:#496e5a;border
 @keyframes chart-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.28);opacity:.78}}
 @media(max-width:1150px){.subscribe-page .subscribe-option{grid-template-columns:1fr;padding-top:18px}.subscribe-page .subscribe-copy{min-height:0}.subscribe-page .subscribe-copy h3+p{max-width:650px}.subscribe-page .subscribe-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:600px){.subscribe-page .subscribe-plan>.panel-heading{padding:18px 17px 0}.subscribe-page .subscribe-option{padding:15px 17px 18px;gap:13px}.subscribe-page .subscribe-copy{padding:18px!important}.subscribe-copy-note{margin-top:14px}.subscribe-page .subscribe-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.subscribe-page .subscription-metric{min-height:82px;padding:12px}.subscribe-page .subscription-total{grid-column:1/-1;min-height:68px}.subscribe-page .subscription-metric strong{font-size:18px}.subscribe-page .subscribe-buttons{gap:8px}.subscribe-page .subscribe-buttons .button{padding:10px 8px;font-size:11px}}
+
+/* Isometric city view, live chart interaction, and a quiet city backdrop. */
+main{position:relative;isolation:isolate}
+.ambient-city{position:absolute;z-index:-1;right:-42px;bottom:-12px;left:-42px;height:min(34vw,380px);overflow:hidden;pointer-events:none;opacity:.12;mask-image:linear-gradient(to bottom,transparent 0%,#000 36%,#000 100%)}
+.ambient-city svg{display:block;width:100%;height:100%}
+.city-panel{overflow:hidden;margin-bottom:18px;padding:0;background:linear-gradient(145deg,#fff 0%,#f7fcf6 100%)}
+.city-panel-heading{align-items:center;padding:18px 22px 12px}
+.city-panel-heading h2{color:#214f3d}
+.city-panel-heading p{margin-top:6px}
+.city-readouts{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.city-readouts>span{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #e0eee1;border-radius:999px;background:#fbfef9;color:#63836d;font-size:10px;white-space:nowrap}
+.city-readouts i{width:6px;height:6px;border-radius:50%;background:#57b77c;box-shadow:0 0 0 3px #57b77c20}
+.city-readouts>span:nth-child(2) i{background:#83b94e;box-shadow:0 0 0 3px #83b94e20}
+.city-readouts strong{color:#285b41;font-size:12px;font-variant-numeric:tabular-nums}
+.city-readouts small{color:#91a999;font-size:9px}
+.city-scene{padding:0 14px 14px}
+.city-visual{display:block;width:100%;height:clamp(170px,20vw,245px);border:1px solid #e3f0e5;border-radius:13px;background:#eaf5e9}
+.city-building{transform-box:fill-box;transform-origin:50% 100%;animation:city-rise .7s cubic-bezier(.18,.7,.24,1) both}
+.city-building:nth-of-type(2){animation-delay:.08s}.city-building:nth-of-type(3){animation-delay:.15s}.city-building:nth-of-type(4){animation-delay:.22s}.city-building:nth-of-type(5){animation-delay:.29s}
+.city-data-route{animation:route-flow 7s linear infinite}
+.city-sensor-ring{transform-box:fill-box;transform-origin:center;animation:sensor-ping 2s ease-out infinite}
+.chart-wrap{position:relative}
+.chart-hit{cursor:crosshair;outline:none}
+.chart-hit:hover,.chart-hit:focus-visible{fill:#389d79!important;fill-opacity:.22!important;stroke:#389d79!important;stroke-opacity:.4!important;stroke-width:1.5px!important}
+.chart-tooltip{position:absolute;z-index:4;display:flex;min-width:112px;flex-direction:column;gap:4px;padding:9px 12px;border:1px solid #cde6d3;border-radius:10px;background:#fffffff2;color:#6b8a75;box-shadow:0 7px 22px #174d3020;font-size:10px;pointer-events:none;backdrop-filter:blur(8px)}
+.chart-tooltip[hidden]{display:none}
+.chart-tooltip strong{color:#1f654a;font-size:17px;font-variant-numeric:tabular-nums}
+.chart-tooltip strong small{margin-left:4px;color:#779583;font-size:9px;font-weight:500}
+.chart-tooltip span{white-space:nowrap}
+@keyframes city-rise{from{opacity:.45;transform:translateY(9px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes route-flow{to{stroke-dashoffset:-52}}
+@keyframes sensor-ping{0%{transform:scale(.7);opacity:.9}100%{transform:scale(2.3);opacity:0}}
+@media(max-width:800px){.city-panel-heading{align-items:flex-start;flex-direction:column;padding:16px 16px 11px}.city-readouts{justify-content:flex-start}.city-scene{padding:0 10px 10px}.city-visual{height:180px}.ambient-city{right:-18px;left:-18px;height:230px;opacity:.09}.chart-tooltip{min-width:102px}}
+@media(prefers-reduced-motion:reduce){.city-building,.city-data-route,.city-sensor-ring{animation:none!important}}

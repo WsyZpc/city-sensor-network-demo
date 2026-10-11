@@ -1,7 +1,7 @@
 "use strict";
 
 function initApp() {
-  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "chain-status", "anchor-stage", "anchor-feedback", "toast"].map(id => [id, document.getElementById(id)]));
+  const ui = Object.fromEntries(["toggle", "sample", "error", "status", "pm25", "noise", "total", "chart", "chart-unit", "chart-range", "chart-empty", "chart-tooltip", "city-pm25", "city-noise", "records", "updated", "seal", "sample-json", "batches", "diagnostic", "wallet-login", "wallet-logout", "access-status", "chain-status", "anchor-stage", "anchor-feedback", "toast"].map(id => [id, document.getElementById(id)]));
   const diagnostic = msg => {
     if (ui.diagnostic) ui.diagnostic.textContent = msg;
   };
@@ -296,6 +296,10 @@ function drawChart() {
     const anchor = count === 1 ? "middle" : index === 0 ? "start" : index === last ? "end" : "middle";
     svg += `<text x="${x(index)}" y="${height - 5}" text-anchor="${anchor}" fill="#a0afb2" font-size="9">${time(readings[index].recorded_at)}</text>`;
   }
+  values.forEach((value, index) => {
+    const label = `${time(readings[index].recorded_at)}，${metric === "pm25_ug_m3" ? "PM2.5" : "噪音"} ${Number(value).toFixed(1)} ${metric === "pm25_ug_m3" ? "μg/m³" : "dB"}`;
+    svg += `<circle class="chart-hit" data-reading-index="${index}" cx="${x(index)}" cy="${y(value)}" r="10" fill="transparent" tabindex="0" role="img" aria-label="${label}"/>`;
+  });
   svg += `</g>`;
   ui.chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
   ui.chart.setAttribute("aria-label", `${metric === "pm25_ug_m3" ? "PM2.5" : "噪音"}模拟趋势，共 ${readings.length} 条记录，最新值 ${values.at(-1)}`);
@@ -303,7 +307,40 @@ function drawChart() {
   ui["chart-unit"].textContent = metric === "pm25_ug_m3" ? "浓度 · μg/m³" : "声级 · dB";
   ui["chart-range"].textContent = `${time(readings[0].recorded_at)} — ${time(readings.at(-1).recorded_at)}`;
   ui["chart-empty"].hidden = true;
+  if (ui["city-pm25"]) ui["city-pm25"].textContent = Number(readings.at(-1).pm25_ug_m3).toFixed(1);
+  if (ui["city-noise"]) ui["city-noise"].textContent = Number(readings.at(-1).noise_db).toFixed(1);
 }
+
+function showChartTooltip(index, point, clientX, clientY) {
+  if (!snapshot?.readings.length || !ui["chart-tooltip"]) return;
+  const readings = snapshot.readings.slice(-24);
+  const reading = readings[index];
+  if (!reading) return;
+  const isPm25 = metric === "pm25_ug_m3";
+  const value = Number(reading[metric]).toFixed(1);
+  const wrap = ui.chart.closest(".chart-wrap");
+  const bounds = wrap.getBoundingClientRect();
+  const pointBounds = point.getBoundingClientRect();
+  const x = Number.isFinite(clientX) ? clientX - bounds.left : pointBounds.left + pointBounds.width / 2 - bounds.left;
+  const y = Number.isFinite(clientY) ? clientY - bounds.top : pointBounds.top - bounds.top;
+  ui["chart-tooltip"].innerHTML = `<strong>${value}<small>${isPm25 ? "μg/m³" : "dB"}</small></strong><span>${time(reading.recorded_at)}</span>`;
+  ui["chart-tooltip"].hidden = false;
+  const tipBounds = ui["chart-tooltip"].getBoundingClientRect();
+  ui["chart-tooltip"].style.left = `${Math.max(8, Math.min(bounds.width - tipBounds.width - 8, x - tipBounds.width / 2))}px`;
+  ui["chart-tooltip"].style.top = `${Math.max(8, y - tipBounds.height - 14)}px`;
+}
+
+ui.chart.addEventListener("pointermove", event => {
+  const point = event.target.closest?.(".chart-hit");
+  if (!point) { ui["chart-tooltip"].hidden = true; return; }
+  showChartTooltip(Number(point.dataset.readingIndex), point, event.clientX, event.clientY);
+});
+ui.chart.addEventListener("pointerleave", () => { ui["chart-tooltip"].hidden = true; });
+ui.chart.addEventListener("focusin", event => {
+  const point = event.target.closest?.(".chart-hit");
+  if (point) showChartTooltip(Number(point.dataset.readingIndex), point);
+});
+ui.chart.addEventListener("focusout", () => { ui["chart-tooltip"].hidden = true; });
 
 function renderBatches() {
   ui.batches.replaceChildren();
