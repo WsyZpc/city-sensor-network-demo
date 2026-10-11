@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>数据订阅 · 城市传感器网络</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261012-2">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-4">
 </head>
 <body class="subscribe-page">
   <aside class="sidebar">
@@ -64,14 +64,15 @@
         <div>到期时间: <span id="subscription-end"></span></div>
       </div>
     </section>
-    <section class="panel" style="margin-top:19px">
-      <div class="panel-heading"><div><h2>如何验证订阅生效</h2></div></div>
-      <div class="verify-note" style="padding:20px 24px">
-        <p>1. 连接钱包后，页面会显示当前订阅状态和到期时间。</p>
-        <p>2. 购买订阅后，前往<a href="/">节点控制台</a>下载当前可用的数据批次文件。</p>
-        <p>3. 在<a href="/verify">文件验证</a>页面上传文件，与链上哈希比对。</p>
-        <p>4. 订阅到期后，服务端新下载权限失效；已下载到设备的副本无法撤回。</p>
+    <section class="panel subscriber-flow">
+      <div class="panel-heading"><div><h2>订阅之后，按这 4 步拿到并核验数据</h2><p>适用于需要完整批次文件的企业、应用开发者与研究者；游客可以继续免费查看公开预览。</p></div><span class="tag">DATA USER GUIDE</span></div>
+      <div class="guide-steps">
+        <article class="guide-step"><span>01</span><div><strong>连接钱包</strong><p>读取账户并查看订阅状态。登录签名只用于证明钱包归属，不是付款交易。</p></div></article>
+        <article class="guide-step"><span>02</span><div><strong>核对费用再购买</strong><p>先选天数，检查每日费率和预计总额；确认后在钱包中审核 BOT Chain 交易。</p></div></article>
+        <article class="guide-step"><span>03</span><div><strong>下载当前可用批次</strong><p>回到<a href="/">节点控制台</a>下载 JSON，并在自己的设备留存备份。</p></div></article>
+        <article class="guide-step"><span>04</span><div><strong>独立验证文件</strong><p>在<a href="/verify">文件验证</a>页重新计算 SHA-256，并查询链上存证事件。</p></div></article>
       </div>
+      <p class="subscriber-boundary"><strong>演示边界：</strong>读数由程序模拟；订阅仅开放服务端当前仍可用的完整批次，不代表实时真实传感器数据或跨设备长期交付。到期后不能再发起新的受控下载，已下载文件无法撤回。</p>
     </section>
   </main>
   <script src="/static/ethers.umd.min.js"></script>

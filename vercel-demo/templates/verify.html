@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>文件验证 · 城市传感器网络</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261008-1">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-4">
 </head>
 <body class="verify-page">
   <aside class="sidebar">
@@ -21,6 +21,7 @@
     <header class="page-header">
       <div><div class="eyebrow">VERIFY · HASH · CONFIRM</div><h1>验证数据文件的完整性<span>。</span></h1><p>选择一个批次 JSON 文件，计算 SHA-256 指纹，直接从链上查询是否存证。验证不依赖后端，任何人都可以独立核验。</p></div>
     </header>
+    <section class="integrity-note"><span class="integrity-icon">✓</span><div><strong>验证结论有明确边界</strong><p>匹配表示“这个文件与链上存证的指纹一致”，可以发现存证后的文件改动；它本身不能证明传感器读数真实，也不能替代设备校准和数据源审计。</p></div></section>
     <section class="panel verify-panel">
       <div class="panel-heading"><div><h2>选择待验证的 JSON 文件</h2><p>支持从节点控制台下载的原始批次，也可以选择测试样例检查流程</p></div><span class="tag">本地计算 · 主网核验</span></div>
       <div class="verify-option">
@@ -36,7 +37,8 @@
           <h3>核验会检查什么？</h3>
           <div class="verify-step"><span>01</span><div><strong>文件完整性</strong><small>重新计算 JSON 文件的 SHA-256</small></div></div>
           <div class="verify-step"><span>02</span><div><strong>链上存证</strong><small>查询 BOT Chain 主网交易回执中的事件</small></div></div>
-          <p>测试 JSON 只用于试跑格式与哈希流程，不会显示为链上存证。</p>
+          <div class="verify-step"><span>03</span><div><strong>对照批次信息</strong><small>文件哈希、批次与链上事件匹配才会通过</small></div></div>
+          <p>测试 JSON 只用于试跑格式与哈希流程，不会显示为链上存证。文件在本地读取，不会上传。</p>
           <button id="verify" class="button primary" disabled>选择文件后验证</button>
         </div>
       </div>

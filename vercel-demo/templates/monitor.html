@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>城市传感器网络 · 节点控制台</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261012-3">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-4">
   <script src="/static/wallet.js?v=20261008-1" defer></script>
-  <script src="/static/app.js?v=20261012-3" defer></script>
+  <script src="/static/app.js?v=20261012-4" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -27,6 +27,14 @@
     </header>
     <div id="error" class="error" role="alert" hidden></div>
     <section class="notice"><span class="notice-icon">i</span><div><strong>模拟数据演示</strong><span>读数由 Python 生成，不代表真实监测结果。已打包文件的上链状态见下方批次记录；哈希只能验证文件完整性。<span id="chain-status">BOT Chain 主网配置加载中…</span></span></div><span class="tag">SIMULATION</span></section>
+    <details class="audience-guide panel" open>
+      <summary class="audience-guide-heading"><div><span class="guide-eyebrow">START HERE · A / B / C</span><h2>按你的角色开始</h2><p>这是一套模拟采集与链上存证演示；选择对应角色，按步骤体验。</p></div><span class="guide-toggle"><span class="guide-open-label">收起指引</span><span class="guide-closed-label">查看操作指引</span><span aria-hidden="true">⌄</span></span></summary>
+      <div class="audience-grid">
+        <article class="audience-card audience-a"><div class="audience-card-top"><span class="audience-letter">A</span><span class="audience-role">数据提供方</span></div><h3>采集、打包并提交存证</h3><ol><li>用部署合约的 owner 钱包连接并签名</li><li>等待模拟采样，生成批次并下载备份 JSON</li><li>点击“上链”，在钱包确认存证交易</li></ol><p>登录签名不花 Gas；上链交易会消耗 BOT。</p><a href="#wallet-login" class="guide-link">连接数据方钱包 <span>→</span></a></article>
+        <article class="audience-card audience-b"><div class="audience-card-top"><span class="audience-letter">B</span><span class="audience-role">企业 / 应用开发者</span></div><h3>订阅并使用可用数据</h3><ol><li>查看公开趋势与当前数据批次</li><li>到订阅页连接钱包、核对费用后购买</li><li>下载可用完整 JSON，再独立验证</li></ol><p>当前演示提供批次文件下载，尚未提供生产级 API、筛选和服务等级承诺。</p><a href="/subscribe" class="guide-link">查看订阅方式 <span>→</span></a></article>
+        <article class="audience-card audience-c"><div class="audience-card-top"><span class="audience-letter">C</span><span class="audience-role">公众 / 观察者</span></div><h3>先看城市环境变化</h3><ol><li>无需钱包即可浏览模拟读数和趋势</li><li>查看采样批次、指纹及存证状态</li><li>需要完整数据时，再了解订阅与验证</li></ol><p>屏幕上的读数是程序生成的演示数据，不是武汉实时监测结果。</p><a href="#city-heading" class="guide-link">查看城市可视化 <span>→</span></a></article>
+      </div>
+    </details>
     <section class="node-strip"><div class="node-name"><span class="node-symbol">⌁</span><div><strong>武汉演示节点 <span class="subtle">01</span></strong><small>wuhan-demo-001</small></div></div><div class="node-detail"><span>采样间隔</span><strong>约每 1 秒</strong></div><div class="node-detail"><span>数据来源</span><strong>浏览器触发的模拟采样</strong></div><div class="status-pill" id="status">连接中</div></section>
     <section class="metrics" aria-label="最新监测读数">
       <article class="metric"><div class="metric-title">PM2.5 浓度 <span>01</span></div><div class="metric-value"><strong id="pm25">—</strong><span>μg/m³</span></div><div class="metric-foot"><i></i> 最新模拟读数</div></article>
