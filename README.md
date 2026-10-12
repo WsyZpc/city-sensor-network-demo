@@ -81,6 +81,7 @@ python3 -m venv .venv
 - `/`：模拟数据工作台、批次列表与存证入口。
 - `/subscribe`：连接钱包、查看订阅状态并购买数据订阅。
 - `/verify`：上传批次 JSON，核对 SHA-256 与链上回执。
+- `/about`：线上版产品介绍与 A/B/C 端体验指引。
 - `/docs`：FastAPI 接口文档。
 
 ## 项目结构
