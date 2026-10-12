@@ -127,6 +127,11 @@ def verify_page():
     return FileResponse(ROOT / "templates" / "verify.html")
 
 
+@app.get("/about", include_in_schema=False)
+def about_page():
+    return FileResponse(ROOT / "templates" / "about.html")
+
+
 def session_address(request: Request) -> str | None:
     return wallet_sessions.get_address(
         request.cookies.get("sensor_session"),
