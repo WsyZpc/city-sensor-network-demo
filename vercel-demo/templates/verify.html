@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>文件验证 · 城市传感器网络</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261012-5">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-7">
 </head>
 <body class="verify-page">
   <aside class="sidebar">
@@ -14,15 +14,20 @@
     <a href="/subscribe" class="nav-item"><span>☑</span> 数据订阅</a>
     <a href="/verify" class="nav-current"><span> EDI</span> 文件验证 <span class="nav-dot"></span></a>
     <a href="/about" class="nav-item"><span>◎</span> 产品介绍</a>
-    <div class="sidebar-note"><span class="note-line"></span><strong>验证数据完整性。</strong><p>计算文件哈希，与链上存证比对。<br>不依赖后端，直接从 BOT Chain 读取。</p></div>
+    <div class="sidebar-note"><span class="note-line"></span><strong>验证数据完整性。</strong><p>本地计算文件哈希，<br>再核对项目索引与主网交易。</p></div>
     <div class="stage"><span>当前阶段</span><strong>02 / 订阅与验证</strong><p>链上独立验证</p></div>
   </aside>
   <main>
     <div class="topbar"><span>工作台 <span class="slash">/</span> 文件验证</span><span class="local-badge"><i></i> BOT Chain 主网</span></div>
     <header class="page-header">
-      <div><div class="eyebrow">VERIFY · HASH · CONFIRM</div><h1>验证数据文件的完整性<span>。</span></h1><p>选择一个批次 JSON 文件，计算 SHA-256 指纹，直接从链上查询是否存证。验证不依赖后端，任何人都可以独立核验。</p></div>
+      <div><div class="eyebrow">VERIFY · HASH · CONFIRM</div><h1>验证数据文件的完整性<span>。</span></h1><p>在浏览器计算批次 JSON 的 SHA-256，查询项目批次索引，再核对提供的 BOT Chain 主网交易回执。文件内容不会上传服务器。</p></div>
     </header>
     <section class="integrity-note"><span class="integrity-icon">✓</span><div><strong>验证结论有明确边界</strong><p>匹配表示“这个文件与链上存证的指纹一致”，可以发现存证后的文件改动；它本身不能证明传感器读数真实，也不能替代设备校准和数据源审计。</p></div></section>
+    <section class="fraud-demo panel" aria-labelledby="fraud-demo-title">
+      <div class="fraud-demo-mark" aria-hidden="true">?</div>
+      <div class="fraud-demo-copy"><span class="fraud-demo-eyebrow">对照实验 · 未存证文件</span><h2 id="fraud-demo-title">看起来像批次，能通过链上核验吗？</h2><p>下载一份随机生成的模拟 JSON。它会声称一个指纹和交易哈希，但生成时没有为它登记或上链；上传验证后，对照实际文件指纹、项目索引和主网交易回执。</p><span id="fraud-demo-status" class="fraud-demo-status" role="status" aria-live="polite">步骤：下载示例 → 在下方选择文件 → 点击验证文件</span></div>
+      <button id="download-fraud-sample" class="button fraud-demo-button" type="button">下载未存证 JSON <span aria-hidden="true">↓</span></button>
+    </section>
     <section class="panel verify-panel">
       <div class="panel-heading"><div><h2>选择待验证的 JSON 文件</h2><p>支持从节点控制台下载的原始批次，也可以选择测试样例检查流程</p></div><span class="tag">本地计算 · 主网核验</span></div>
       <div class="verify-option">
@@ -50,16 +55,18 @@
         <div>文件名: <span id="file-name"></span></div>
         <div>文件大小: <span id="file-size"></span></div>
         <div>文件指纹: <span id="local-hash" class="hash"></span></div>
+        <div>文件声称指纹: <span id="claimed-hash" class="hash"></span></div>
+        <div>项目指纹登记: <span id="registry-status"></span></div>
         <div>链上查询: <span id="chain-status"></span></div>
         <div>交易哈希: <span id="anchor-tx" class="hash"></span></div>
         <div>区块时间: <span id="block-time"></span></div>
         <div>验证状态: <span id="verify-status"></span></div>
         <div>区块号: <span id="block-number"></span></div>
       </div>
-      <p class="verify-note">提示：修改文件中的任意一个数字后重新验证，指纹将不匹配原存证。验证直接读取 BOT Chain 主网上的 DataRecorded 事件，不经过后端。</p>
+      <p class="verify-note">提示：文件能计算 SHA-256 不等于已上链。只有取得交易回执并核对 BOT Chain 主网上的 DataRecorded 事件，才能确认存证匹配；“未登记”只表示本项目索引未找到该文件。</p>
     </section>
   </main>
   <script src="/static/ethers.umd.min.js"></script>
-  <script src="/static/verify.js?v=20261008-1"></script>
+  <script src="/static/verify.js?v=20261012-2"></script>
 </body>
 </html>

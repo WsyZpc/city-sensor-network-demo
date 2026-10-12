@@ -8,11 +8,15 @@ const ui = {
     fileName: document.getElementById('file-name'),
     fileSize: document.getElementById('file-size'),
     localHash: document.getElementById('local-hash'),
+    claimedHash: document.getElementById('claimed-hash'),
+    registryStatus: document.getElementById('registry-status'),
     chainStatus: document.getElementById('chain-status'),
     anchorTx: document.getElementById('anchor-tx'),
     blockTime: document.getElementById('block-time'),
     blockNumber: document.getElementById('block-number'),
     verifyStatus: document.getElementById('verify-status'),
+    fraudDownload: document.getElementById('download-fraud-sample'),
+    fraudStatus: document.getElementById('fraud-demo-status'),
 };
 
 let chainConfig = null;
@@ -49,6 +53,41 @@ async function sha256Hex(buffer) {
     return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function randomHex(byteCount) {
+    const bytes = crypto.getRandomValues(new Uint8Array(byteCount));
+    return '0x' + Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function downloadFraudSample() {
+    const now = new Date().toISOString();
+    const id = randomHex(8).slice(2);
+    const fileName = `unverified-sensor-demo-${id}.json`;
+    const payload = {
+        demo_notice: '演示用未存证文件；以下读数、指纹与交易哈希均为模拟内容。',
+        batch_seq: Number.parseInt(id.slice(0, 8), 16),
+        node_id: `unverified-demo-${id}`,
+        created_at: now,
+        claimed_sha256: randomHex(32),
+        claimed_anchor_tx: randomHex(32),
+        readings: [{ sequence: 1, recorded_at: now, pm25_ug_m3: 28.4, noise_db: 55.2, source: 'simulated-unverified' }],
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    ui.fraudStatus.textContent = `已下载 ${fileName}。请在下方选择它，然后点击“验证文件”。`;
+}
+
+function showVerificationFailure(message) {
+    ui.verifyStatus.textContent = `未通过链上存证验证：${message}`;
+    ui.verifyStatus.className = 'verify-bad';
+}
+
 async function verifyFile() {
     const file = ui.fileInput.files[0];
     if (!file) {
@@ -74,6 +113,13 @@ async function verifyFile() {
         ui.fileName.textContent = file.name;
         ui.fileSize.textContent = `${file.size} 字节`;
         ui.localHash.textContent = dataHashBytes32;
+        const claimedHash = typeof payload.claimed_sha256 === 'string' ? payload.claimed_sha256 : '';
+        ui.claimedHash.textContent = claimedHash
+            ? `${claimedHash}（${claimedHash.toLowerCase() === dataHashBytes32.toLowerCase() ? '一致' : '与实算指纹不一致'}）`
+            : '—';
+        ui.claimedHash.className = claimedHash && claimedHash.toLowerCase() !== dataHashBytes32.toLowerCase()
+            ? 'hash claim-mismatch' : 'hash';
+        ui.registryStatus.textContent = '查询中…';
         ui.chainStatus.textContent = '查询链上事件…';
         ui.anchorTx.textContent = '—';
         ui.blockTime.textContent = '—';
@@ -82,35 +128,41 @@ async function verifyFile() {
         ui.verifyStatus.className = '';
         ui.verifyResult.hidden = false;
 
-        const metadataResponse = await fetch(`/api/hash/${hash}`, { cache: 'no-store' });
-        const localAnchor = savedAnchor(hash);
-        if (!metadataResponse.ok && !localAnchor) {
-            ui.chainStatus.textContent = '当前实例没有这份文件的链上记录';
-            ui.verifyStatus.textContent = '✓ 文件格式和 SHA-256 完整性验证通过；暂未找到链上存证';
-            ui.verifyStatus.className = 'verify-ok';
-            return;
+        const metadataResponse = await fetch(`/api/hash/${hash}`, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+        if (!metadataResponse.ok && metadataResponse.status !== 404) {
+            throw new Error(`项目指纹索引暂不可用（${metadataResponse.status}），无法得出未登记结论。`);
         }
-        const batch = metadataResponse.ok ? await metadataResponse.json() : {
+        const registeredBatch = metadataResponse.ok ? await metadataResponse.json() : null;
+        ui.registryStatus.textContent = registeredBatch ? '✓ 找到对应批次' : '未找到此文件指纹';
+        const localAnchor = savedAnchor(hash);
+        const batch = registeredBatch || (localAnchor ? {
             sha256_hex: hash,
             file_name: localAnchor.file_name,
             anchor_tx: localAnchor.anchor_tx,
             anchor_verified: true,
-        };
-        if (localAnchor?.anchor_verified && !batch.anchor_verified) {
+        } : null);
+        if (localAnchor?.anchor_verified && batch && !batch.anchor_verified) {
             batch.anchor_tx = localAnchor.anchor_tx;
             batch.file_name = localAnchor.file_name;
             batch.anchor_verified = true;
         }
-        if (!batch.anchor_verified || !batch.anchor_tx) {
-            ui.chainStatus.textContent = '文件指纹已登记，等待链上存证';
-            ui.verifyStatus.textContent = '✓ 文件格式和 SHA-256 完整性验证通过；尚无已核实链上交易';
-            ui.verifyStatus.className = 'verify-ok';
+        const claimedTx = typeof payload.claimed_anchor_tx === 'string' && /^0x[0-9a-fA-F]{64}$/.test(payload.claimed_anchor_tx)
+            ? payload.claimed_anchor_tx : '';
+        const txHash = batch?.anchor_tx || claimedTx;
+        if (!txHash) {
+            ui.chainStatus.textContent = '没有可核验的交易哈希';
+            showVerificationFailure(registeredBatch ? '批次已登记，但尚未提供存证交易。' : '项目索引未登记，也没有交易线索。');
             return;
         }
         await init();
-
-        const receipt = await provider.getTransactionReceipt(batch.anchor_tx.startsWith('0x') ? batch.anchor_tx : `0x${batch.anchor_tx}`);
-        if (!receipt || receipt.status !== 1) throw new Error('存证交易暂时无法读取或未成功确认。');
+        ui.anchorTx.textContent = txHash;
+        const receipt = await provider.getTransactionReceipt(txHash.startsWith('0x') ? txHash : `0x${txHash}`);
+        if (!receipt) {
+            ui.chainStatus.textContent = batch ? '登记的交易暂时查无回执' : '文件声称的交易在主网上查无回执';
+            showVerificationFailure('找不到可核验的主网存证交易。');
+            return;
+        }
+        if (receipt.status !== 1) throw new Error('存证交易未成功确认。');
         const contract = new ethers.Contract(chainConfig.contract_address, chainAbi, provider);
         const event = receipt.logs
             .filter(log => log.address.toLowerCase() === chainConfig.contract_address.toLowerCase())
@@ -119,7 +171,7 @@ async function verifyFile() {
                 && parsed.name === 'DataRecorded'
                 && parsed.args.streamId.toNumber() === Number(chainConfig.stream_id)
                 && parsed.args.dataHash.toLowerCase() === dataHashBytes32.toLowerCase()
-                && parsed.args.cid === batch.file_name);
+                && parsed.args.cid === (batch?.file_name || file.name));
 
         if (!event) {
             throw new Error('交易回执里没有与文件哈希、数据流和批次文件名都匹配的存证事件。');
@@ -130,12 +182,15 @@ async function verifyFile() {
         if (!block) throw new Error('区块时间暂不可读取。');
         ui.blockTime.textContent = new Date(block.timestamp * 1000).toLocaleString('zh-CN', { hour12: false });
         ui.blockNumber.textContent = receipt.blockNumber;
-        ui.verifyStatus.textContent = '✓ 验证通过：文件 SHA-256 与交易回执中的链上存证一致';
-        ui.verifyStatus.className = 'verify-ok';
+        if (claimedHash && claimedHash.toLowerCase() !== dataHashBytes32.toLowerCase()) {
+            showVerificationFailure('文件自称的指纹与实际 SHA-256 不一致。');
+        } else {
+            ui.verifyStatus.textContent = '✓ 验证通过：文件 SHA-256 与交易回执中的链上存证一致';
+            ui.verifyStatus.className = 'verify-ok';
+        }
     } catch (error) {
         ui.chainStatus.textContent = '查询失败';
-        ui.verifyStatus.textContent = `验证失败: ${error.message || error}`;
-        ui.verifyStatus.className = 'verify-bad';
+        showVerificationFailure(error.message || String(error));
     } finally {
         ui.verify.disabled = false;
         ui.verify.textContent = '验证文件';
@@ -143,6 +198,7 @@ async function verifyFile() {
 }
 
 ui.verify.addEventListener('click', verifyFile);
+ui.fraudDownload.addEventListener('click', downloadFraudSample);
 ui.fileInput.addEventListener('change', () => {
     const file = ui.fileInput.files[0];
     ui.selectedFile.textContent = file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB` : '尚未选择文件';

@@ -202,3 +202,17 @@ main{position:relative;isolation:isolate}
 @media(max-width:800px){.sidebar{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px 7px}.sidebar .brand{flex:0 0 100%;margin-bottom:7px}.sidebar .nav-current,.sidebar .nav-item{display:inline-flex;flex:0 0 auto;padding:8px 10px;border-radius:8px;font-size:11px}.sidebar .nav-current>span:first-child,.sidebar .nav-item>span:first-child{font-size:14px}.sidebar .nav-dot{display:none}.about-hero{margin-top:17px}.about-intro{grid-template-columns:1fr;gap:13px;padding-top:39px}.about-values{grid-template-columns:1fr;margin-bottom:45px}.about-values article{min-height:0}.about-value-icon{margin-bottom:9px}.about-section-head{align-items:start;flex-direction:column;gap:6px}.about-section-head>p{text-align:left}.about-flow{margin-bottom:45px}}
 @media(max-width:520px){.about-hero{min-height:0;border-radius:17px}.about-hero-copy{padding:32px 22px 43px}.about-overline{font-size:8px;letter-spacing:1.1px}.about-hero h1{margin-top:22px;font-size:38px;letter-spacing:-1.7px}.about-hero-copy>p{font-size:12px}.about-hero-art{right:-54%;width:125%;opacity:.29}.about-hero-actions{gap:8px}.about-hero-actions a{width:100%}.about-hero-meta{gap:8px}.about-hero-index{display:none}.about-intro h2{font-size:23px}.about-intro p{font-size:12px}.about-flow-grid{gap:8px}.about-flow-grid>div{min-height:133px;padding:13px}.about-flow-grid strong{font-size:12px}.about-flow-grid p{font-size:9px}.about-flow-grid>div:after{display:none}.about-boundary{gap:11px;padding:19px}}
 @media(prefers-reduced-motion:reduce){.about-data-path{animation:none}}
+
+/* An unanchored sample makes the difference between a computed hash and chain proof visible. */
+.verify-page .fraud-demo{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:18px;align-items:center;margin:0 0 17px;padding:22px 24px;border-color:#eadfc8;background:linear-gradient(110deg,#fffdf6,#fff9ed 68%,#f5fbef);box-shadow:0 11px 26px #8d693410}
+.fraud-demo-mark{display:grid;place-items:center;width:48px;height:48px;border:1px solid #eacb92;border-radius:15px;background:#fff0cf;color:#98612c;font-size:27px;font-weight:750}
+.fraud-demo-eyebrow{color:#a27643;font-size:9px;font-weight:750;letter-spacing:1.4px}
+.fraud-demo-copy h2{margin:7px 0 0;color:#315b40;font-size:16px}
+.fraud-demo-copy p{max-width:750px;margin:8px 0;color:#7b8570;font-size:11px;line-height:1.75}
+.fraud-demo-status{display:block;color:#926f49;font-size:10px;line-height:1.6}
+.verify-page .fraud-demo-button{display:inline-flex;justify-content:center;align-items:center;gap:10px;min-width:166px;min-height:42px;border-color:#b6d7b5;background:#e8f4df;color:#286743;font-weight:700}
+.verify-page .fraud-demo-button:hover{border-color:#89bd93;background:#d9efcf;transform:translateY(-2px)}
+.fraud-demo-button span{font-size:16px}
+.verify-grid .hash{overflow-wrap:anywhere}.verify-grid .claim-mismatch{color:#a35b31}
+@media(max-width:900px){.verify-page .fraud-demo{grid-template-columns:42px minmax(0,1fr)}.fraud-demo-mark{width:42px;height:42px}.verify-page .fraud-demo-button{grid-column:2;justify-self:start}}
+@media(max-width:520px){.verify-page .fraud-demo{grid-template-columns:1fr;gap:10px;padding:17px}.verify-page .fraud-demo-button{grid-column:1;width:100%}.fraud-demo-copy h2{font-size:15px}}
