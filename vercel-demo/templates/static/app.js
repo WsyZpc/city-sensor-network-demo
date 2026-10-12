@@ -262,8 +262,9 @@ async function request(path, options = {}) {
 
 function drawChart() {
   if (!snapshot?.readings.length) return;
-  // Keep a shorter rolling window so each new sample moves farther across the chart.
-  const readings = snapshot.readings.slice(-24);
+  // Show recent samples at equal horizontal intervals. A long pause between
+  // sessions must not squeeze the newest readings against the right edge.
+  const readings = snapshot.readings.slice(-12);
   const width = Math.max(240, ui.chart.clientWidth);
   const height = ui.chart.clientHeight;
   const left = 38, right = 12, top = 15, bottom = 29;
@@ -272,9 +273,9 @@ function drawChart() {
   const padding = Math.max(2, (maxValue - minValue) * .25);
   const low = Math.max(0, Math.floor(minValue - padding));
   const high = Math.ceil(maxValue + padding);
-  const timestamps = readings.map(reading => Date.parse(reading.recorded_at));
-  const elapsed = timestamps.at(-1) - timestamps[0];
-  const x = index => readings.length === 1 ? (left + width - right) / 2 : left + (width - left - right) * (elapsed > 0 ? (timestamps[index] - timestamps[0]) / elapsed : index / (readings.length - 1));
+  const x = index => readings.length === 1
+    ? (left + width - right) / 2
+    : left + (width - left - right) * index / (readings.length - 1);
   const y = value => height - bottom - (value - low) / (high - low) * (height - top - bottom);
   const color = metric === "pm25_ug_m3" ? "#439985" : "#638fae";
   const points = values.map((value, index) => `${x(index)},${y(value)}`).join(" ");
@@ -313,7 +314,7 @@ function drawChart() {
 
 function showChartTooltip(index, point, clientX, clientY) {
   if (!snapshot?.readings.length || !ui["chart-tooltip"]) return;
-  const readings = snapshot.readings.slice(-24);
+  const readings = snapshot.readings.slice(-12);
   const reading = readings[index];
   if (!reading) return;
   const isPm25 = metric === "pm25_ug_m3";

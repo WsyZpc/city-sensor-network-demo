@@ -87,11 +87,11 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   const fetch = async (url, options = {}) => {
     let body;
     if (url.startsWith('/api/readings')) {
-      body = { total: 12, readings: [reading(10, 0), reading(11, 1), reading(12, 2)],
+      body = { total: 12, readings: [reading(10, 0), reading(11, 1), reading(12, 3600)],
         sampling_mode: 'browser', interval_seconds: 1, sampling_error: false };
     } else if (url === '/api/sample' && options.method === 'POST') {
       sampleCount += 1;
-      body = reading(13, 3 + sampleCount);
+      body = reading(13, 3603 + sampleCount);
     } else if (url.endsWith('/anchor') && options.method === 'POST') {
       body = { anchor_verified: true };
     } else if (url.startsWith('/api/batches')) body = {
@@ -119,6 +119,13 @@ async function browserSamplingSurvivesOldServerSnapshots() {
   assert.ok(Number(elements.get('total').textContent) >= 14, 'Displayed total must advance');
   assert.ok(elements.get('records').children.length > 3, 'New samples must remain visible after old snapshots');
   assert.ok(JSON.parse(saved.get('city-sensor-network:browser-readings')).length >= 2);
+  const chartPositions = [...elements.get('chart').innerHTML.matchAll(/class="chart-hit"[^>]*cx="([\d.]+)"/g)]
+    .map(match => Number(match[1]));
+  assert.ok(chartPositions.length >= 4, 'Expected several visible chart samples');
+  for (let index = 1; index < chartPositions.length; index++) {
+    assert.ok(chartPositions[index] - chartPositions[index - 1] >= 80,
+      'A long gap in recorded time must not squeeze samples together');
+  }
   assert.equal(elements.get('seal').disabled, true, 'Guest must not be able to create an anchor batch');
   assert.equal(elements.get('sample-json').disabled, true, 'Guest must not download preview JSON');
   assert.match(elements.get('chain-status').textContent, /配置已读取/);
