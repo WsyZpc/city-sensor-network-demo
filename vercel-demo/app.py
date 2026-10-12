@@ -114,6 +114,11 @@ async def local_controls(request: Request, call_next):
 
 @app.get("/", include_in_schema=False)
 def homepage():
+    return FileResponse(ROOT / "templates" / "about.html")
+
+
+@app.get("/console", include_in_schema=False)
+def console_page():
     return FileResponse(ROOT / "templates" / "monitor.html")
 
 

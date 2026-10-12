@@ -11,21 +11,21 @@
   <aside class="sidebar">
     <a class="brand" href="/" aria-label="城市传感器网络首页"><span class="brand-mark">◉</span><span>城市传感器网络<small>URBAN SENSOR NETWORK</small></span></a>
     <div class="workspace-label">工作空间 / 武汉演示节点</div>
-    <a href="/" class="nav-item"><span>▦</span> 节点控制台</a>
+    <a href="/" class="nav-current" aria-current="page"><span>◎</span> 产品介绍 <span class="nav-dot"></span></a>
+    <a href="/console" class="nav-item"><span>▦</span> 节点控制台</a>
     <a href="/subscribe" class="nav-item"><span>☑</span> 数据订阅</a>
     <a href="/verify" class="nav-item"><span> EDI</span> 文件验证</a>
-    <a href="/about" class="nav-current" aria-current="page"><span>◎</span> 产品介绍 <span class="nav-dot"></span></a>
     <div class="sidebar-note"><span class="note-line"></span><strong>让每条数据都能被看见。</strong><p>从城市环境的细微变化，<br>走向可核验的数据协作。</p></div>
-    <div class="stage"><span>当前阶段</span><strong>03 / 认识产品</strong><p>愿景 · 价值 · 体验路径</p></div>
+    <div class="stage"><span>当前阶段</span><strong>00 / 认识产品</strong><p>愿景 · 价值 · 体验路径</p></div>
   </aside>
   <main>
-    <div class="topbar"><span>工作台 <span class="slash">/</span> 产品介绍</span><span class="local-badge"><i></i> BOT Chain Demo</span></div>
+    <div class="topbar"><span>首页 <span class="slash">/</span> 产品介绍</span><span class="local-badge"><i></i> BOT Chain Demo</span></div>
     <section class="about-hero" aria-labelledby="about-title">
       <div class="about-hero-copy">
         <span class="about-overline"><span class="about-overline-dot"></span> URBAN SENSOR NETWORK · PRODUCT STORY</span>
         <h1 id="about-title">让城市环境数据，<br><em>有迹可循。</em></h1>
         <p>从一条空气质量读数出发，把采集、打包、存证、订阅和验证连成清晰的路径。让环境变化看得见，让数据交付有依据。</p>
-        <div class="about-hero-actions"><a class="about-hero-primary" href="/">进入节点控制台 <span aria-hidden="true">↗</span></a><a class="about-hero-secondary" href="#roles">选择你的角色 <span aria-hidden="true">↓</span></a></div>
+        <div class="about-hero-actions"><a class="about-hero-primary" href="/console">进入节点控制台 <span aria-hidden="true">↗</span></a><a class="about-hero-secondary" href="#roles">选择你的角色 <span aria-hidden="true">↓</span></a></div>
         <div class="about-hero-meta"><span><i></i> 模拟环境数据</span><span><i></i> BOT Chain 主网存证</span><span><i></i> 文件独立核验</span></div>
       </div>
       <svg class="about-hero-art" viewBox="0 0 740 510" role="img" aria-labelledby="about-art-title about-art-desc" preserveAspectRatio="xMidYMid slice">
@@ -83,9 +83,9 @@
     <section id="roles" class="about-roles" aria-labelledby="about-roles-title">
       <div class="about-section-head"><div><span class="about-section-label">CHOOSE YOUR PATH <span>03</span></span><h2 id="about-roles-title">按你的角色开始</h2></div><p>每一种参与方式，都有一条清晰的体验路线。</p></div>
       <div class="audience-grid">
-        <article class="audience-card audience-a"><div class="audience-card-top"><span class="audience-letter">A</span><span class="audience-role">数据提供方</span></div><h3>采集、打包并提交存证</h3><ol><li>用部署合约的 owner 钱包连接并签名</li><li>等待模拟采样，生成批次并下载备份 JSON</li><li>点击“上链”，在钱包确认存证交易</li></ol><p>登录签名不花 Gas；上链交易会消耗 BOT。</p><a href="/#wallet-login" class="guide-link">连接数据方钱包 <span>→</span></a></article>
+        <article class="audience-card audience-a"><div class="audience-card-top"><span class="audience-letter">A</span><span class="audience-role">数据提供方</span></div><h3>采集、打包并提交存证</h3><ol><li>用部署合约的 owner 钱包连接并签名</li><li>等待模拟采样，生成批次并下载备份 JSON</li><li>点击“上链”，在钱包确认存证交易</li></ol><p>登录签名不花 Gas；上链交易会消耗 BOT。</p><a href="/console#wallet-login" class="guide-link">连接数据方钱包 <span>→</span></a></article>
         <article class="audience-card audience-b"><div class="audience-card-top"><span class="audience-letter">B</span><span class="audience-role">企业 / 应用开发者</span></div><h3>订阅并使用可用数据</h3><ol><li>查看公开趋势与当前数据批次</li><li>到订阅页连接钱包、核对费用后购买</li><li>下载可用完整 JSON，再独立验证</li></ol><p>当前演示提供批次文件下载，尚未提供生产级 API、筛选和服务等级承诺。</p><a href="/subscribe" class="guide-link">查看订阅方式 <span>→</span></a></article>
-        <article class="audience-card audience-c"><div class="audience-card-top"><span class="audience-letter">C</span><span class="audience-role">公众 / 观察者</span></div><h3>先看城市环境变化</h3><ol><li>无需钱包即可浏览模拟读数和趋势</li><li>查看采样批次、指纹及存证状态</li><li>需要完整数据时，再了解订阅与验证</li></ol><p>屏幕上的读数是程序生成的演示数据，不是武汉实时监测结果。</p><a href="/#city-heading" class="guide-link">查看城市可视化 <span>→</span></a></article>
+        <article class="audience-card audience-c"><div class="audience-card-top"><span class="audience-letter">C</span><span class="audience-role">公众 / 观察者</span></div><h3>先看城市环境变化</h3><ol><li>无需钱包即可浏览模拟读数和趋势</li><li>查看采样批次、指纹及存证状态</li><li>需要完整数据时，再了解订阅与验证</li></ol><p>屏幕上的读数是程序生成的演示数据，不是武汉实时监测结果。</p><a href="/console#city-heading" class="guide-link">查看城市可视化 <span>→</span></a></article>
       </div>
     </section>
 
