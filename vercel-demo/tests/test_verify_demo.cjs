@@ -45,7 +45,7 @@ async function main() {
     };
     if (url.startsWith('/api/hash/')) {
       if (mode === 'server-error') return { ok: false, status: 500 };
-      if (mode === 'fraud') return { ok: false, status: 404 };
+      if (mode === 'fraud' || mode === 'browser-valid') return { ok: false, status: 404 };
       return { ok: true, json: async () => ({ file_name: currentFileName, anchor_tx: validTx, anchor_verified: true }) };
     }
     throw new Error(`Unexpected request ${url}`);
@@ -54,7 +54,7 @@ async function main() {
     providers: { JsonRpcProvider: class {
       async getTransactionReceipt(txHash) {
         receiptChecks++;
-        if (mode !== 'valid' || txHash !== validTx) return null;
+        if ((mode !== 'valid' && mode !== 'browser-valid') || txHash !== validTx) return null;
         return { status: 1, transactionHash: validTx, blockNumber: 42, logs: [{ address: contractAddress }] };
       }
       async getBlock() { return { timestamp: 1791777600 }; }
@@ -94,7 +94,7 @@ async function main() {
   }
   await chooseAndVerify(downloaded[0].blob, downloaded[0].name);
   assert.match(elements.get('claimed-hash').textContent, /与实算指纹不一致/);
-  assert.match(elements.get('registry-status').textContent, /未找到/);
+  assert.match(elements.get('registry-status').textContent, /未收录云端/);
   assert.match(elements.get('chain-status').textContent, /查无回执/);
   assert.match(elements.get('verify-status').textContent, /未通过链上存证验证/);
   assert.equal(elements.get('verify-status').className, 'verify-bad');
@@ -107,12 +107,16 @@ async function main() {
 
   mode = 'valid';
   currentFileName = 'real-batch.json';
-  const realBlob = new Blob([JSON.stringify({ batch_seq: 7, readings: [{ pm25_ug_m3: 20 }] })], { type: 'application/json' });
+  const realBlob = new Blob([JSON.stringify({ batch_seq: 7, readings: [{ pm25_ug_m3: 20 }], claimed_anchor_tx: validTx })], { type: 'application/json' });
   currentHash = createHash('sha256').update(Buffer.from(await realBlob.arrayBuffer())).digest('hex');
   await chooseAndVerify(realBlob, currentFileName);
-  assert.match(elements.get('registry-status').textContent, /找到对应批次/);
+  assert.match(elements.get('registry-status').textContent, /已收录服务端批次/);
   assert.match(elements.get('chain-status').textContent, /已从 BOT Chain 回执核对/);
   assert.equal(elements.get('verify-status').className, 'verify-ok');
+  mode = 'browser-valid';
+  await chooseAndVerify(realBlob, currentFileName);
+  assert.match(elements.get('registry-status').textContent, /未收录云端；链上凭证已匹配/);
+  assert.equal(elements.get('verify-status').className, 'verify-ok', 'A valid chain receipt must pass even without a cloud batch row');
   console.log('Unanchored sample and verified batch checks passed.');
 }
 

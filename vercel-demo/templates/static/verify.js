@@ -133,7 +133,7 @@ async function verifyFile() {
             throw new Error(`项目指纹索引暂不可用（${metadataResponse.status}），无法得出未登记结论。`);
         }
         const registeredBatch = metadataResponse.ok ? await metadataResponse.json() : null;
-        ui.registryStatus.textContent = registeredBatch ? '✓ 找到对应批次' : '未找到此文件指纹';
+        ui.registryStatus.textContent = registeredBatch ? '✓ 已收录服务端批次' : '未收录云端；继续核验链上凭证';
         const localAnchor = savedAnchor(hash);
         const batch = registeredBatch || (localAnchor ? {
             sha256_hex: hash,
@@ -177,6 +177,7 @@ async function verifyFile() {
             throw new Error('交易回执里没有与文件哈希、数据流和批次文件名都匹配的存证事件。');
         }
         ui.chainStatus.textContent = '✓ 已从 BOT Chain 回执核对存证事件';
+        if (!registeredBatch) ui.registryStatus.textContent = '未收录云端；链上凭证已匹配';
         ui.anchorTx.textContent = receipt.transactionHash;
         const block = await provider.getBlock(receipt.blockNumber);
         if (!block) throw new Error('区块时间暂不可读取。');

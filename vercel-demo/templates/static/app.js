@@ -408,7 +408,7 @@ function renderBatches() {
       const cacheLabel = document.createElement("span");
       cacheLabel.className = "cache-status";
       cacheLabel.textContent = cachedFile
-        ? batch.browser_generated ? "本机生成 · 原文件已保存" : "本机缓存 · JSON 可下载"
+        ? batch.browser_generated ? "本机批次 · 原文件仅在此浏览器" : "本机缓存 · JSON 可下载"
         : "本机缓存 · 仅指纹";
       cacheLabel.title = cachedFile
         ? "JSON 文件保存在当前浏览器，可随时下载。"

@@ -216,3 +216,18 @@ main{position:relative;isolation:isolate}
 .verify-grid .hash{overflow-wrap:anywhere}.verify-grid .claim-mismatch{color:#a35b31}
 @media(max-width:900px){.verify-page .fraud-demo{grid-template-columns:42px minmax(0,1fr)}.fraud-demo-mark{width:42px;height:42px}.verify-page .fraud-demo-button{grid-column:2;justify-self:start}}
 @media(max-width:520px){.verify-page .fraud-demo{grid-template-columns:1fr;gap:10px;padding:17px}.verify-page .fraud-demo-button{grid-column:1;width:100%}.fraud-demo-copy h2{font-size:15px}}
+
+/* Network glyph replaces the placeholder circle throughout the workspace. */
+.brand-logo{display:block;flex:0 0 48px;width:48px;height:48px;border-radius:14px;box-shadow:0 7px 18px #071f1944;transition:transform .2s ease,filter .2s ease}
+.brand>span{min-width:0}
+.brand:hover .brand-logo{transform:translateY(-2px);filter:drop-shadow(0 3px 8px #a7f18d55)}
+@media(max-width:800px){.brand-logo{flex-basis:42px;width:42px;height:42px}}
+@media(prefers-reduced-motion:reduce){.brand-logo{transition:none}.brand:hover .brand-logo{transform:none}}
+
+/* Keep the subscription walkthrough title and guide label inside its card. */
+.subscribe-page .subscriber-flow>.panel-heading{align-items:center;padding:21px 20px 16px;border-bottom:1px solid #e1efe2;background:linear-gradient(100deg,#fbfef9,#f4fbf1)}
+.subscribe-page .subscriber-flow>.panel-heading>div{min-width:0}
+.subscribe-page .subscriber-flow>.panel-heading h2{line-height:1.4}
+.subscribe-page .subscriber-flow>.panel-heading .tag{flex-shrink:0;margin:0;padding:7px 10px;border:1px solid #d8e9d6;border-radius:999px;background:#ecf7e8;color:#56856a;font-size:8px}
+.subscribe-page .guide-steps{padding-top:17px}
+@media(max-width:800px){.subscribe-page .subscriber-flow>.panel-heading{align-items:flex-start;padding:18px 16px 15px}.subscribe-page .subscriber-flow>.panel-heading .tag{align-self:flex-start}.subscribe-page .guide-steps{padding-top:14px}}

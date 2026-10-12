@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>数据订阅 · 城市传感器网络</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261012-5">
+  <link rel="icon" type="image/svg+xml" href="/static/brand-mark.svg">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-8">
 </head>
 <body class="subscribe-page">
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="城市传感器网络首页"><span class="brand-mark">◉</span><span>城市传感器网络<small>URBAN SENSOR NETWORK</small></span></a>
+    <a class="brand" href="/" aria-label="城市传感器网络首页"><img class="brand-logo" src="/static/brand-mark.svg" alt="" width="48" height="48"><span>城市传感器网络<small>URBAN SENSOR NETWORK</small></span></a>
     <div class="workspace-label">工作空间 / 武汉演示节点</div>
     <a href="/" class="nav-item"><span>◎</span> 产品介绍</a>
     <a href="/console" class="nav-item"><span>▦</span> 节点控制台</a>
@@ -53,7 +54,7 @@
         </div>
       </div>
     </section>
-    <div class="notice" style="margin-top:19px"><span class="notice-icon">i</span><div><strong>演示限制</strong><span>新生成的本机批次只保存在数据方当前浏览器；Vercel 临时文件可能过期。购买链上订阅不会自动把该文件交付到其他设备，跨设备商业交付尚需持久存储。请在支付 BOT 前确认所需文件可用。</span></div></div>
+    <div class="notice" style="margin-top:19px"><span class="notice-icon">i</span><div><strong>交付范围</strong><span>已存入云数据库的服务端批次，可由有权限的钱包在其他设备重新登录后下载。本机生成的 browser-batch 原始 JSON 只保存在当前浏览器；链上指纹不能还原文件。请先下载并备份本机文件，再决定是否购买订阅。</span></div></div>
     <section id="wallet-info" class="panel" hidden>
       <div class="panel-heading"><div><h2>钱包信息</h2></div></div>
       <div class="verify-grid">
@@ -70,10 +71,10 @@
       <div class="guide-steps">
         <article class="guide-step"><span>01</span><div><strong>连接钱包</strong><p>读取账户并查看订阅状态。登录签名只用于证明钱包归属，不是付款交易。</p></div></article>
         <article class="guide-step"><span>02</span><div><strong>核对费用再购买</strong><p>先选天数，检查每日费率和预计总额；确认后在钱包中审核 BOT Chain 交易。</p></div></article>
-        <article class="guide-step"><span>03</span><div><strong>下载当前可用批次</strong><p>回到<a href="/console">节点控制台</a>下载 JSON，并在自己的设备留存备份。</p></div></article>
+        <article class="guide-step"><span>03</span><div><strong>下载当前可用批次</strong><p>回到<a href="/console">节点控制台</a>下载云端批次 JSON；本机批次需由数据方另行提供原文件。</p></div></article>
         <article class="guide-step"><span>04</span><div><strong>独立验证文件</strong><p>在<a href="/verify">文件验证</a>页重新计算 SHA-256，并查询链上存证事件。</p></div></article>
       </div>
-      <p class="subscriber-boundary"><strong>演示边界：</strong>读数由程序模拟；订阅仅开放服务端当前仍可用的完整批次，不代表实时真实传感器数据或跨设备长期交付。到期后不能再发起新的受控下载，已下载文件无法撤回。</p>
+      <p class="subscriber-boundary"><strong>演示边界：</strong>读数由程序模拟。云端已保存的批次支持跨设备按权限下载；浏览器本机批次尚未自动同步，必须保留并交付原始 JSON。到期后不能再发起新的受控下载，已下载文件无法撤回。</p>
     </section>
   </main>
   <script src="/static/ethers.umd.min.js"></script>

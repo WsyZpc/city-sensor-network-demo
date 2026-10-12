@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>文件验证 · 城市传感器网络</title>
-  <link rel="stylesheet" href="/static/style.css?v=20261012-7">
+  <link rel="icon" type="image/svg+xml" href="/static/brand-mark.svg">
+  <link rel="stylesheet" href="/static/style.css?v=20261012-8">
 </head>
 <body class="verify-page">
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="城市传感器网络首页"><span class="brand-mark">◉</span><span>城市传感器网络<small>URBAN SENSOR NETWORK</small></span></a>
+    <a class="brand" href="/" aria-label="城市传感器网络首页"><img class="brand-logo" src="/static/brand-mark.svg" alt="" width="48" height="48"><span>城市传感器网络<small>URBAN SENSOR NETWORK</small></span></a>
     <div class="workspace-label">工作空间 / 武汉演示节点</div>
     <a href="/" class="nav-item"><span>◎</span> 产品介绍</a>
     <a href="/console" class="nav-item"><span>▦</span> 节点控制台</a>
@@ -56,17 +57,17 @@
         <div>文件大小: <span id="file-size"></span></div>
         <div>文件指纹: <span id="local-hash" class="hash"></span></div>
         <div>文件声称指纹: <span id="claimed-hash" class="hash"></span></div>
-        <div>项目指纹登记: <span id="registry-status"></span></div>
+        <div>云端批次索引: <span id="registry-status"></span></div>
         <div>链上查询: <span id="chain-status"></span></div>
         <div>交易哈希: <span id="anchor-tx" class="hash"></span></div>
         <div>区块时间: <span id="block-time"></span></div>
         <div>验证状态: <span id="verify-status"></span></div>
         <div>区块号: <span id="block-number"></span></div>
       </div>
-      <p class="verify-note">提示：文件能计算 SHA-256 不等于已上链。只有取得交易回执并核对 BOT Chain 主网上的 DataRecorded 事件，才能确认存证匹配；“未登记”只表示本项目索引未找到该文件。</p>
+      <p class="verify-note">文件指纹是原始 JSON 字节的 SHA-256，任何可读取的文件都能计算；它本身不代表已上链。云端批次索引只收录服务端保存的文件；本机生成的 browser-batch 即使有有效链上存证，也可能不在云端索引中。验证通过须以 BOT Chain 主网交易回执中的 DataRecorded 事件与文件指纹、数据流和文件名匹配为准。</p>
     </section>
   </main>
   <script src="/static/ethers.umd.min.js"></script>
-  <script src="/static/verify.js?v=20261012-2"></script>
+  <script src="/static/verify.js?v=20261012-3"></script>
 </body>
 </html>
