@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>订阅者数据解析 · 城市传感器网络</title>
+  <link rel="icon" type="image/svg+xml" href="/static/brand-mark.svg">
+  <link rel="stylesheet" href="/static/style.css?v=20261013-1">
+  <script src="/static/ethers.umd.min.js" defer></script>
+  <script src="/static/wallet.js?v=20261008-1" defer></script>
+  <script src="/static/parser.js?v=20261013-1" defer></script>
+</head>
+<body class="parser-page">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="城市传感器网络首页"><img class="brand-logo" src="/static/brand-mark.svg" alt="" width="48" height="48"><span>城市传感器网络<small>URBAN SENSOR NETWORK</small></span></a>
+    <div class="workspace-label">工作空间 / 武汉演示节点</div>
+    <a href="/" class="nav-item"><span>◎</span> 产品介绍</a>
+    <a href="/console" class="nav-item"><span>▦</span> 节点控制台</a>
+    <a href="/subscribe" class="nav-item"><span>☑</span> 数据订阅</a>
+    <a href="/parser" class="nav-current" aria-current="page"><span>⌁</span> 订阅者解析 <span class="nav-dot"></span></a>
+    <a href="/verify" class="nav-item"><span> EDI</span> 文件验证</a>
+    <div class="sidebar-note"><span class="note-line"></span><strong>让数据成为洞察。</strong><p>从一份 JSON 开始，<br>看懂城市环境变化。</p></div>
+    <div class="stage"><span>当前阶段</span><strong>03 / 订阅者工作台</strong><p>权限核验 · 数据解析</p></div>
+  </aside>
+  <main>
+    <div class="topbar"><span>工作台 <span class="slash">/</span> 订阅者解析</span><span class="local-badge"><i></i> 订阅权限保护</span></div>
+    <header class="parser-hero">
+      <div class="parser-hero-copy"><div class="eyebrow">SUBSCRIBER DATA STUDIO · BOT CHAIN</div><h1>把环境数据，<br>读成城市的脉搏<span>。</span></h1><p>上传已获得的批次 JSON，查看 PM2.5 与噪音趋势、统计指标和逐条记录。解析请求由服务端再次核验链上订阅。</p></div>
+      <div class="parser-hero-art" aria-hidden="true"><span class="parser-art-orbit"></span><span class="parser-art-orbit second"></span><span class="parser-art-core">⌁</span><span class="parser-art-signal">DATA<br>FLOW</span></div>
+    </header>
+    <section class="panel parser-access" aria-labelledby="parser-access-title">
+      <div class="parser-access-icon" aria-hidden="true">◆</div>
+      <div><h2 id="parser-access-title">正在核验订阅权限</h2><p id="access-message" role="status" aria-live="polite">读取钱包登录与 BOT Chain 订阅状态…</p></div>
+      <div class="parser-access-actions"><button id="parser-connect" class="button secondary" type="button">连接钱包</button><a id="parser-subscribe" class="button primary" href="/subscribe">查看订阅</a></div>
+    </section>
+    <section id="parser-workspace" hidden>
+      <section class="panel parser-upload" aria-labelledby="parser-upload-title">
+        <div><span class="parser-section-kicker">01 / IMPORT</span><h2 id="parser-upload-title">选择批次 JSON</h2><p>支持本站下载的服务端批次，以及数据方交付的 browser-batch。最多 2 MB、5,000 条记录。文件仅在本次请求中解析，不保存原文。</p></div>
+        <div class="parser-upload-controls"><label class="parser-file-control" for="parser-file" tabindex="0"><span>选择 JSON 文件</span><small id="parser-file-name">尚未选择文件</small></label><input id="parser-file" type="file" accept=".json,application/json" hidden><button id="parser-run" class="button primary" type="button" disabled>解析数据 ↗</button></div>
+      </section>
+      <p id="parser-error" class="parser-error" role="alert" hidden></p>
+      <section id="parser-result" hidden>
+        <div class="parser-result-heading"><div><span class="parser-section-kicker">02 / INSIGHT</span><h2>批次数据概览</h2><p id="parser-meta"></p></div><button id="parser-csv" type="button" class="button secondary">导出 CSV</button></div>
+        <div class="parser-stats"><article><span>采样记录</span><strong id="parser-count">—</strong><small>条有效读数</small></article><article><span>平均 PM2.5</span><strong id="parser-pm25">—</strong><small>μg/m³</small></article><article><span>平均噪音</span><strong id="parser-noise">—</strong><small>dB</small></article><article><span>文件 SHA-256</span><strong id="parser-hash" class="parser-hash">—</strong><small>可前往文件验证页核对链上存证</small></article></div>
+        <section class="panel parser-chart-panel"><div class="parser-chart-heading"><div><span class="parser-section-kicker">03 / TREND</span><h2>环境变化趋势</h2><p id="parser-chart-caption">按采样顺序展示</p></div><div class="parser-chart-switch" role="group" aria-label="趋势指标"><button id="metric-pm25" type="button" class="active" aria-pressed="true">PM2.5</button><button id="metric-noise" type="button" aria-pressed="false">噪音</button></div></div><div class="parser-chart"><svg viewBox="0 0 900 220" preserveAspectRatio="none" role="img" aria-label="环境数据趋势"><defs><linearGradient id="parser-area" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#32b886" stop-opacity=".34"/><stop offset="1" stop-color="#32b886" stop-opacity="0"/></linearGradient></defs><path id="parser-area-path" fill="url(#parser-area)"></path><path id="parser-line-path" fill="none" stroke="#168c6c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg></div><div class="parser-chart-foot"><span id="parser-chart-min">—</span><span id="parser-chart-max">—</span></div></section>
+        <section class="panel parser-table-panel"><div class="parser-chart-heading"><div><span class="parser-section-kicker">04 / RECORDS</span><h2>逐条采样记录</h2><p>下方显示前 100 条；导出的 CSV 包含本批次全部记录。</p></div><a href="/verify" class="parser-verify-link">核验原始文件 ↗</a></div><div class="parser-table-scroll"><table><thead><tr><th>序号</th><th>采样时间</th><th>PM2.5 μg/m³</th><th>噪音 dB</th></tr></thead><tbody id="parser-rows"></tbody></table></div></section>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

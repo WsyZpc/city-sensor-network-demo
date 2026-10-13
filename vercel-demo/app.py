@@ -5,6 +5,7 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -132,6 +133,11 @@ def verify_page():
     return FileResponse(ROOT / "templates" / "verify.html")
 
 
+@app.get("/parser", include_in_schema=False)
+def parser_page():
+    return FileResponse(ROOT / "templates" / "parser.html")
+
+
 @app.get("/about", include_in_schema=False)
 def about_page():
     return FileResponse(ROOT / "templates" / "about.html")
@@ -162,6 +168,88 @@ def required_owner(request: Request) -> str:
     if owner.lower() != address.lower():
         raise HTTPException(status_code=403, detail="只有数据提供方钱包可以打包或提交链上存证。")
     return address
+
+
+def required_subscriber(request: Request) -> str:
+    address = required_address(request)
+    try:
+        subscribed = chain.subscription(address, int(CHAIN_CONFIG["stream_id"]))["valid"]
+    except ChainError as error:
+        raise HTTPException(status_code=503, detail="链上订阅状态暂不可查，请稍后重试。") from error
+    if not subscribed:
+        raise HTTPException(status_code=403, detail="仅有效订阅钱包可以使用数据解析服务。")
+    return address
+
+
+MAX_PARSE_BYTES = 2 * 1024 * 1024
+MAX_PARSE_READINGS = 5000
+
+
+def parse_subscriber_batch(contents: bytes) -> dict:
+    try:
+        payload = json.loads(contents.decode("utf-8-sig"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=422, detail="文件不是有效的 UTF-8 JSON。") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("readings"), list):
+        raise HTTPException(status_code=422, detail="请选择包含 readings 数组的批次 JSON。")
+    source_rows = payload["readings"]
+    if not 1 <= len(source_rows) <= MAX_PARSE_READINGS:
+        raise HTTPException(status_code=422, detail=f"批次须包含 1–{MAX_PARSE_READINGS} 条采样记录。")
+    rows = []
+    def valid_number(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        try:
+            return math.isfinite(value)
+        except OverflowError:
+            return False
+
+    for index, row in enumerate(source_rows, 1):
+        if not isinstance(row, dict):
+            raise HTTPException(status_code=422, detail=f"第 {index} 条采样记录格式无效。")
+        pm25, noise = row.get("pm25_ug_m3"), row.get("noise_db")
+        if not valid_number(pm25) or not valid_number(noise):
+            raise HTTPException(status_code=422, detail=f"第 {index} 条记录缺少有效的 PM2.5 或噪音数值。")
+        if not 0 <= pm25 <= 2000 or not 0 <= noise <= 200:
+            raise HTTPException(status_code=422, detail=f"第 {index} 条记录的环境读数超出支持范围。")
+        sequence = row.get("sequence")
+        if isinstance(sequence, bool) or not isinstance(sequence, int) or not 0 <= sequence <= 2**53 - 1:
+            raise HTTPException(status_code=422, detail=f"第 {index} 条记录的序号无效。")
+        recorded_at = row.get("recorded_at")
+        if not isinstance(recorded_at, str) or not recorded_at.strip():
+            raise HTTPException(status_code=422, detail=f"第 {index} 条记录的采样时间无效。")
+        rows.append({"sequence": sequence, "recorded_at": recorded_at[:80],
+                     "pm25_ug_m3": pm25, "noise_db": noise})
+
+    def stats(field: str) -> dict:
+        values = [row[field] for row in rows]
+        return {"min": min(values), "max": max(values), "average": round(sum(values) / len(values), 2),
+                "latest": values[-1]}
+
+    declared_count = payload.get("reading_count")
+    return {
+        "sha256_hex": hashlib.sha256(contents).hexdigest(),
+        "node_id": str(payload.get("node_id") or "未知节点")[:120],
+        "batch_seq": payload.get("batch_seq"),
+        "sealed_at": str(payload.get("sealed_at") or "—")[:80],
+        "source": str(payload.get("source") or "未知来源")[:80],
+        "reading_count": len(rows),
+        "declared_count_matches": declared_count is None or declared_count == len(rows),
+        "pm25": stats("pm25_ug_m3"),
+        "noise": stats("noise_db"),
+        "readings": rows,
+    }
+
+
+@app.post("/api/subscriber/parse")
+async def parse_subscriber_file(request: Request):
+    required_subscriber(request)
+    contents = bytearray()
+    async for chunk in request.stream():
+        contents.extend(chunk)
+        if len(contents) > MAX_PARSE_BYTES:
+            raise HTTPException(status_code=413, detail="文件超过 2 MB，请选择较小的批次 JSON。")
+    return parse_subscriber_batch(bytes(contents))
 
 
 def set_auth_cookie(response: Response, request: Request, name: str, token: str, max_age: int):
