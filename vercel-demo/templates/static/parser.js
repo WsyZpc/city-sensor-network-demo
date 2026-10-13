@@ -1,7 +1,7 @@
 "use strict";
 
 const ui = Object.fromEntries([
-  "parser-connect", "parser-subscribe", "parser-workspace", "parser-file", "parser-file-name",
+  "parser-connect", "parser-refresh", "parser-subscribe", "parser-workspace", "parser-file", "parser-file-name",
   "parser-run", "parser-error", "parser-result", "parser-meta", "parser-count", "parser-pm25",
   "parser-noise", "parser-hash", "parser-csv", "parser-rows", "metric-pm25", "metric-noise",
   "parser-chart-caption", "parser-chart-min", "parser-chart-max", "parser-area-path", "parser-line-path",
@@ -11,6 +11,7 @@ const accessMessage = document.getElementById("access-message");
 let allowed = false;
 let parsed = null;
 let chartMetric = "pm25_ug_m3";
+let connectingWallet = false;
 
 function showError(message) {
   ui["parser-error"].textContent = message;
@@ -24,14 +25,14 @@ function updateRunButton() {
 function setAccess(access) {
   allowed = Boolean(access?.authenticated && access?.subscription?.valid);
   ui["parser-workspace"].hidden = !allowed;
-  ui["parser-connect"].hidden = Boolean(access?.authenticated);
+  ui["parser-connect"].textContent = access?.authenticated ? "切换 / 重新验证钱包" : "连接钱包";
   ui["parser-subscribe"].hidden = allowed;
   if (allowed) {
     accessTitle.textContent = "订阅已验证 · 工作台已解锁";
     accessMessage.textContent = `钱包 ${access.address.slice(0, 6)}…${access.address.slice(-4)} 已获得此数据流的有效订阅。`;
   } else if (access?.authenticated) {
     accessTitle.textContent = "当前钱包尚未订阅";
-    accessMessage.textContent = "登录已完成，但该数据流没有有效订阅。请先购买，再返回此页解析 JSON。";
+    accessMessage.textContent = `当前登录钱包 ${access.address.slice(0, 6)}…${access.address.slice(-4)} 对数据流 #${access.subscription?.stream_id ?? 0} 没有有效订阅。若已购买，请核对付款钱包并刷新状态。`;
   } else {
     accessTitle.textContent = "仅向有效订阅者开放";
     accessMessage.textContent = "连接钱包并签名登录后，系统会核对 BOT Chain 订阅状态。";
@@ -41,19 +42,38 @@ function setAccess(access) {
 }
 
 async function readAccess() {
+  const button = ui["parser-refresh"];
+  button.disabled = true;
   try {
     const response = await fetch("/api/access", { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error((await response.json()).detail || "订阅状态查询失败。");
-    setAccess(await response.json());
+    const access = await response.json();
+    const injected = window.ethereum?.providers?.find(provider => provider.isMetaMask) || window.ethereum;
+    if (access.authenticated && injected?.request) {
+      const accounts = await Promise.race([
+        injected.request({ method: "eth_accounts" }).catch(() => []),
+        new Promise(resolve => setTimeout(() => resolve([]), 2000)),
+      ]);
+      if (accounts.length && accounts[0].toLowerCase() !== access.address.toLowerCase()) {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+        setAccess(null);
+        accessMessage.textContent = "MetaMask 当前账户与已登录钱包不同。请点击连接钱包，使用付款账户重新签名。";
+        return;
+      }
+    }
+    setAccess(access);
   } catch (error) {
     setAccess(null);
     accessTitle.textContent = "暂时无法核验订阅";
     accessMessage.textContent = `${error.message} 请稍后重试。`;
+  } finally {
+    button.disabled = false;
   }
 }
 
 async function connectWallet() {
   const button = ui["parser-connect"];
+  connectingWallet = true;
   button.disabled = true;
   button.textContent = "等待钱包确认…";
   showError("");
@@ -75,8 +95,9 @@ async function connectWallet() {
   } catch (error) {
     showError(error.message || "钱包连接失败，请重试。");
   } finally {
+    connectingWallet = false;
     button.disabled = false;
-    button.textContent = "连接钱包";
+    button.textContent = allowed ? "切换 / 重新验证钱包" : "连接钱包";
   }
 }
 
@@ -180,6 +201,7 @@ function exportCsv() {
 }
 
 ui["parser-connect"].addEventListener("click", connectWallet);
+ui["parser-refresh"].addEventListener("click", readAccess);
 document.querySelector(".parser-file-control").addEventListener("keydown", event => {
   if (event.key === "Enter" || event.key === " ") { event.preventDefault(); ui["parser-file"].click(); }
 });
@@ -195,7 +217,10 @@ ui["parser-run"].addEventListener("click", parseFile);
 ui["parser-csv"].addEventListener("click", exportCsv);
 ui["metric-pm25"].addEventListener("click", () => { chartMetric = "pm25_ug_m3"; drawChart(); });
 ui["metric-noise"].addEventListener("click", () => { chartMetric = "noise_db"; drawChart(); });
-window.addEventListener("sensor-wallet-changed", () => {
-  fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).finally(readAccess);
+const injectedWallet = window.ethereum?.providers?.find(provider => provider.isMetaMask) || window.ethereum;
+injectedWallet?.on?.("accountsChanged", () => {
+  if (connectingWallet) return;
+  setAccess(null);
+  readAccess();
 });
 readAccess();

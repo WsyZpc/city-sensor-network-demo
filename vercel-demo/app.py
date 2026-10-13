@@ -336,7 +336,9 @@ def access_status(request: Request):
         return {"authenticated": False, "can_download": False}
     try:
         owner_access = chain.owner().lower() == address.lower()
-        subscription = {"valid": False, "stream_id": int(CHAIN_CONFIG["stream_id"])} if owner_access else chain.subscription(address, int(CHAIN_CONFIG["stream_id"]))
+        # Owner access and a paid subscription are separate facts. The parser
+        # grants access only for the latter, so always query it even for owner.
+        subscription = chain.subscription(address, int(CHAIN_CONFIG["stream_id"]))
     except ChainError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return {"authenticated": True, "address": address, "owner_access": owner_access, "subscription": subscription, "can_download": owner_access or subscription["valid"]}

@@ -13,10 +13,14 @@ ADDRESS = "0x" + "22" * 20
 
 
 class FakeChain:
-    def __init__(self, valid=False, offline=False):
+    def __init__(self, valid=False, offline=False, owner=ADDRESS):
         self.valid = valid
         self.offline = offline
         self.calls = 0
+        self._owner = owner
+
+    def owner(self):
+        return self._owner
 
     def subscription(self, address, stream_id):
         self.calls += 1
@@ -60,6 +64,17 @@ class SubscriberParserTests(unittest.TestCase):
                 self.post()
         self.assertEqual(error.exception.status_code, 401)
         self.assertEqual(chain.calls, 0)
+
+    def test_owner_subscription_status_is_not_falsely_marked_invalid(self):
+        chain = FakeChain(valid=True, owner=ADDRESS)
+        with patch.object(webapp, "session_address", return_value=ADDRESS), patch.object(webapp, "chain", chain):
+            access = webapp.access_status(object())
+            result = self.post()
+        self.assertTrue(access["owner_access"])
+        self.assertTrue(access["subscription"]["valid"])
+        self.assertTrue(access["can_download"])
+        self.assertEqual(result["reading_count"], 2)
+        self.assertEqual(chain.calls, 2)
 
     def test_logged_in_wallet_without_subscription_cannot_parse(self):
         chain = FakeChain(valid=False)

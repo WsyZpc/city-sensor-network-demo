@@ -6,10 +6,10 @@
   <meta name="color-scheme" content="light">
   <title>订阅者数据解析 · 城市传感器网络</title>
   <link rel="icon" type="image/svg+xml" href="/static/brand-mark.svg">
-  <link rel="stylesheet" href="/static/style.css?v=20261013-1">
+  <link rel="stylesheet" href="/static/style.css?v=20261013-2">
   <script src="/static/ethers.umd.min.js" defer></script>
   <script src="/static/wallet.js?v=20261008-1" defer></script>
-  <script src="/static/parser.js?v=20261013-1" defer></script>
+  <script src="/static/parser.js?v=20261013-2" defer></script>
 </head>
 <body class="parser-page">
   <aside class="sidebar">
@@ -32,7 +32,7 @@
     <section class="panel parser-access" aria-labelledby="parser-access-title">
       <div class="parser-access-icon" aria-hidden="true">◆</div>
       <div><h2 id="parser-access-title">正在核验订阅权限</h2><p id="access-message" role="status" aria-live="polite">读取钱包登录与 BOT Chain 订阅状态…</p></div>
-      <div class="parser-access-actions"><button id="parser-connect" class="button secondary" type="button">连接钱包</button><a id="parser-subscribe" class="button primary" href="/subscribe">查看订阅</a></div>
+      <div class="parser-access-actions"><button id="parser-refresh" class="button secondary" type="button">刷新订阅状态</button><button id="parser-connect" class="button secondary" type="button">连接钱包</button><a id="parser-subscribe" class="button primary" href="/subscribe">查看订阅</a></div>
     </section>
     <section id="parser-workspace" hidden>
       <section class="panel parser-upload" aria-labelledby="parser-upload-title">
